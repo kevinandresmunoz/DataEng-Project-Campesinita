@@ -14,8 +14,47 @@ def log(message: str):
 
 
 def get_catalog():
-    """Obtener catalogo actual automaticamente"""
-    return spark.sql("SELECT current_catalog()").collect()[0][0]
+    """
+    Obtener catalogo correcto automaticamente
+    Busca cualquier catalogo que contenga 'campesinita' y 'dev' o 'prod'
+    """
+    # Primero intentar con el catalogo actual
+    current = spark.sql("SELECT current_catalog()").collect()[0][0]
+    
+    # Si el catalogo actual contiene 'campesinita', usarlo
+    if "campesinita" in current.lower():
+        return current
+    
+    # Si no, buscar en todos los catalogos disponibles
+    catalogs = spark.sql("SHOW CATALOGS").collect()
+    
+    # Buscar catalogo con 'campesinita' y 'dev'
+    for row in catalogs:
+        cat_name = row[0]
+        if "campesinita" in cat_name.lower() and "dev" in cat_name.lower():
+            log(f"Catalogo detectado: {cat_name}")
+            spark.sql(f"USE CATALOG {cat_name}")
+            return cat_name
+    
+    # Si no encuentra dev, buscar prod
+    for row in catalogs:
+        cat_name = row[0]
+        if "campesinita" in cat_name.lower() and "prod" in cat_name.lower():
+            log(f"Catalogo detectado: {cat_name}")
+            spark.sql(f"USE CATALOG {cat_name}")
+            return cat_name
+    
+    # Si no encuentra ninguno, buscar cualquiera con 'campesinita'
+    for row in catalogs:
+        cat_name = row[0]
+        if "campesinita" in cat_name.lower():
+            log(f"Catalogo detectado: {cat_name}")
+            spark.sql(f"USE CATALOG {cat_name}")
+            return cat_name
+    
+    # Si no encuentra nada, usar el actual
+    log(f"Usando catalogo actual: {current}")
+    return current
 
 
 def read_bronze_table(table: str) -> DataFrame:
@@ -29,10 +68,25 @@ def read_bronze_table(table: str) -> DataFrame:
     full_table = f"{catalog}.bronze.{table}"
     log(f"Leyendo Bronze: {full_table}")
     
-    df = spark.table(full_table)
-    count = df.count()
-    log(f"Registros leidos: {count:,}")
-    return df
+    try:
+        df = spark.table(full_table)
+        count = df.count()
+        log(f"Registros leidos: {count:,}")
+        return df
+    except Exception as e:
+        log(f"Error leyendo {full_table}: {e}")
+        log("Verificando si la tabla existe...")
+        
+        # Intentar listar tablas en bronze para debug
+        try:
+            tables = spark.sql(f"SHOW TABLES IN {catalog}.bronze").collect()
+            log(f"Tablas disponibles en {catalog}.bronze:")
+            for t in tables:
+                log(f"  - {t.tableName}")
+        except:
+            pass
+        
+        raise Exception(f"No se pudo leer la tabla {full_table}. Verifica que el DDL se haya ejecutado correctamente.")
 
 
 def write_silver(df: DataFrame, table: str, partition_by: list = None):

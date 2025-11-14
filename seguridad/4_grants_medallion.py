@@ -55,8 +55,26 @@ print(f"Ambiente inferido: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC ALTER GROUP analitica ADD USER `kandres4488@hotmail.com`;
+# MAGIC %md
+# MAGIC ## Agregar Usuarios al Grupo
+# MAGIC 
+# MAGIC Los usuarios deben estar previamente habilitados en Azure Active Directory
+# MAGIC y sincronizados con el Databricks Workspace.
+# MAGIC 
+# MAGIC Gestion de usuarios:
+# MAGIC 1. Habilitar usuario en Azure Active Directory
+# MAGIC 2. Sincronizar con Databricks (automatico o manual desde Admin Console)
+# MAGIC 3. Agregar usuario al grupo analitica mediante Admin Console o SQL
+# MAGIC 
+# MAGIC Ejemplo SQL para agregar usuario:
+# MAGIC ALTER GROUP analitica ADD USER `usuario@dominio.com`;
+# MAGIC 
+# MAGIC Los permisos se asignan al grupo, no a usuarios individuales.
+
+# COMMAND ----------
+
+# Descomentar y actualizar con el email del usuario a agregar
+# spark.sql("ALTER GROUP analitica ADD USER `usuario@dominio.com`")
 
 # COMMAND ----------
 

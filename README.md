@@ -278,29 +278,103 @@ databricks://token:<TOKEN>@<HOST>:443/<CATALOG>?http_path=<HTTP_PATH>
 - Ejecucion paralela en Bronze to Silver
 - Ejecucion secuencial en Silver to Gold
 
-## Recursos Recomendados
-
-- Cluster: Standard_DS3_v2 o superior
-- Spark: 3.4+
-- DBR: 13.3 LTS
-
 ## Documentacion Tecnica
 
 Ver [proceso/descripcionETL.md](proceso/descripcionETL.md) para detalles del proceso ETL.
 
-## Prerequisitos Azure
+## Servicios Azure Requeridos
 
-Infraestructura configurada:
-- Databricks Workspace: adb-campesinita-dev
-- Unity Catalog: 2 catalogos (dev y prod)
-- Storage Accounts: adlcampesinitadev y adlcampesinitaprod
-- Contenedores: bronze, silver, gold
-- Access Connectors con Managed Identity
-- External Locations: 6 (3 por ambiente)
-- Data Factory: adf-campesinita
-- Key Vault: keys-campesinita
+Este proyecto requiere la siguiente infraestructura en Azure para su implementacion:
 
-Ver imagenes en carpeta `images/` para referencia visual de la configuracion.
+### 1. Azure Databricks Workspace
+- Tier: Premium o Enterprise (requerido para Unity Catalog)
+- Runtime: DBR 13.3 LTS o superior
+- Spark: 3.4+
+- Cluster recomendado: Standard_DS3_v2 o superior
+
+### 2. Unity Catalog
+- 2 catalogos configurados (dev y prod)
+- Metastore asociado al workspace
+- Permisos configurados a nivel de catalogo, schema y tabla
+
+### 3. Azure Data Lake Storage Gen2 (ADLS)
+- 2 Storage Accounts (uno por ambiente: dev y prod)
+- Contenedores por ambiente:
+  - bronze: Datos crudos sincronizados desde bases de datos
+  - silver: Datos limpios y validados
+  - gold: Modelo dimensional optimizado
+- Configuracion de red y firewall segun politicas de seguridad
+
+### 4. Access Connectors for Azure Databricks
+- 2 Access Connectors (uno por ambiente)
+- Managed Identity habilitada
+- Roles asignados:
+  - Storage Blob Data Contributor en los storage accounts correspondientes
+  - Permisos de lectura/escritura en contenedores bronze, silver, gold
+
+### 5. External Locations (Unity Catalog)
+- 6 External Locations configuradas (3 por ambiente):
+  - extl-campesinita-dev-bronze
+  - extl-campesinita-dev-silver
+  - extl-campesinita-dev-gold
+  - extl-campesinita-prod-bronze
+  - extl-campesinita-prod-silver
+  - extl-campesinita-prod-gold
+- Cada External Location vinculada a su Access Connector correspondiente
+
+### 6. Azure Data Factory
+- Pipeline configurado: Pipeline_Ingestion_and_Processing_Dev
+- Linked Services:
+  - Conexion a Databricks Workspace
+  - Autenticacion mediante Access Token
+- Triggers programados (1 PM y 9 PM hora Colombia)
+- Activities configuradas para ejecutar notebooks de ingestion
+
+### 7. Azure Key Vault
+- Secrets configurados para conexiones a bases de datos:
+  - PostgreSQL: host, port, database, user, password
+  - MySQL: host, port, database, user, password
+- Scope en Databricks: accesskeys-campesinita
+- Permisos de lectura para Service Principal de Databricks
+
+### 8. Bases de Datos Operacionales (Fuentes de Datos)
+- PostgreSQL: 7 tablas (ventas, clientes, productos, sucursales, inventario, empleados, detalle_ventas)
+- MySQL: 5 tablas (proveedores, ordenes_compra, movimientos_inventario, recepciones, productos_erp)
+- Datos generados por Apache Airflow (ver directorio data_source)
+
+### 9. Azure Active Directory
+- Usuarios habilitados en Azure AD
+- Sincronizacion con Databricks Workspace
+- Grupos de seguridad configurados
+
+### Configuracion de Usuarios y Permisos
+
+La gestion de usuarios y permisos se realiza mediante:
+
+1. Habilitar usuarios en Azure Active Directory
+2. Sincronizar usuarios con Databricks Workspace
+3. Acceder al panel de administracion de Databricks (Admin Console)
+4. Crear grupo de seguridad: analitica
+5. Agregar usuarios al grupo analitica
+6. Ejecutar script de permisos: seguridad/4_grants_medallion.py
+7. Los permisos se asignan a nivel de grupo, no a usuarios individuales
+
+Permisos del grupo analitica:
+- USAGE y SELECT en schema bronze
+- USAGE, SELECT, MODIFY y CREATE TABLE en schemas silver y gold
+- CREATE EXTERNAL TABLE en External Locations
+
+### Referencia Visual
+
+Ver capturas de pantalla de configuraciones en el directorio `images/`:
+- Configuracion de Azure Storage Accounts
+- Contenedores en ADLS (bronze, silver, gold)
+- External Locations en Unity Catalog
+- Access Connectors y Managed Identity
+- Databricks Credentials y Scopes
+- Servicios Azure desplegados
+
+Estas imagenes sirven como guia visual para replicar la configuracion en otros ambientes.
 
 ---
 
