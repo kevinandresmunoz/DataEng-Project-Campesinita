@@ -115,9 +115,9 @@ write_gold(df_alertas, "fact_alertas_inventario")
 
 # COMMAND ----------
 
-optimize_table("gold.fact_inventario", zorder_cols=["sucursal_key", "producto_key"])
-optimize_table("gold.fact_kpis_inventario", zorder_cols=["sucursal_key"])
-optimize_table("gold.fact_alertas_inventario", zorder_cols=["prioridad", "sucursal_key"])
+optimize_table("gold.fact_inventario", zorder_cols=["producto_key", "estado_caducidad"])
+optimize_table("gold.fact_kpis_inventario", zorder_cols=["stock_total"])
+optimize_table("gold.fact_alertas_inventario", zorder_cols=["prioridad", "producto_key"])
 
 # COMMAND ----------
 

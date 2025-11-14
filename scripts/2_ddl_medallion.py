@@ -24,20 +24,38 @@ dbutils.widgets.text("storage", "")
 
 # COMMAND ----------
 
-# Obtener parametros o usar valores por defecto
+# Obtener parametros
 catalog_input = dbutils.widgets.get("catalog")
 storage_input = dbutils.widgets.get("storage")
 
-# Si no se proporciona catalogo, usar el actual
-if not catalog_input:
-    catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
-    print(f"Catalogo detectado automaticamente: {catalog}")
-else:
+# Detectar o crear catalogo correcto
+if catalog_input:
+    # Si se proporciona catalogo, usarlo
     catalog = catalog_input
     print(f"Catalogo proporcionado: {catalog}")
+else:
+    # Buscar catalogo que contenga 'campesinita'
+    print("Buscando catalogo correcto...")
+    catalogs = spark.sql("SHOW CATALOGS").collect()
+    catalog = None
+    
+    for row in catalogs:
+        cat_name = row[0]
+        if "campesinita" in cat_name.lower():
+            catalog = cat_name
+            print(f"Catalogo encontrado: {catalog}")
+            break
+    
+    # Si no encuentra ninguno, crear cata_campesinita_dev por defecto
+    if not catalog:
+        catalog = "cata_campesinita_dev"
+        print(f"No se encontro catalogo, se creara: {catalog}")
 
-# Si no se proporciona storage, inferir del catalogo
-if not storage_input:
+# Inferir storage del catalogo
+if storage_input:
+    storage = storage_input
+    print(f"Storage proporcionado: {storage}")
+else:
     if "dev" in catalog.lower():
         storage = "adlcampesinitadev"
     elif "prod" in catalog.lower():
@@ -45,9 +63,6 @@ if not storage_input:
     else:
         storage = "adlcampesinitadev"
     print(f"Storage inferido: {storage}")
-else:
-    storage = storage_input
-    print(f"Storage proporcionado: {storage}")
 
 print(f"\nCatalogo: {catalog}")
 print(f"Storage: {storage}")
