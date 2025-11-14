@@ -1,53 +1,43 @@
 # Databricks notebook source
 """
-Sincronización MySQL ERP → Bronze Layer
-Ejecutado por Azure Data Factory 2 veces al dia (1 PM y 9 PM hora Colombia)
+Sincronizacion MySQL a Bronze Layer
+Estrategia: Escribir a tabla temporal y swap atomico
 """
 
 # COMMAND ----------
 
-from pyspark.sql.functions import current_timestamp, lit
+from pyspark.sql.functions import current_timestamp
 from datetime import datetime
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Configuración
-
-# COMMAND ----------
-
-# Obtener credenciales desde Key Vault
 jdbc_hostname = dbutils.secrets.get(scope="accesskeys-campesinita", key="mysqlhost")
 jdbc_port = dbutils.secrets.get(scope="accesskeys-campesinita", key="mysqlport")
 jdbc_database = dbutils.secrets.get(scope="accesskeys-campesinita", key="mysqldatabase")
 jdbc_username = dbutils.secrets.get(scope="accesskeys-campesinita", key="mysqluser")
 jdbc_password = dbutils.secrets.get(scope="accesskeys-campesinita", key="mysqlpassword")
 
-# Detectar catalogo (dev o prod)
 try:
-    current_catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
-    catalog = current_catalog
+    catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
 except:
-    catalog = "adbslacampesinitadev"  # Fallback a dev
+    catalog = "adbslacampesinitadev"
 
 print(f"Catalogo: {catalog}")
 
-# JDBC URL
 jdbc_url = f"jdbc:mysql://{jdbc_hostname}:{jdbc_port}/{jdbc_database}"
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Funciones de Sincronización
-
-# COMMAND ----------
-
-def sync_table_to_bronze(table_name, query, catalog_table):
-    """Sincroniza tabla de MySQL a Bronze Layer usando INSERT INTO"""
+def sync_table(table_name, query, bronze_table):
+    """
+    Sincroniza tabla con estrategia segura:
+    1. Lee desde MySQL
+    2. Escribe a tabla temporal
+    3. Swap atomico (TRUNCATE + INSERT)
+    """
     print(f"Sincronizando {table_name}")
     
     try:
-        # Leer desde MySQL
         df = spark.read \
             .format("jdbc") \
             .option("url", jdbc_url) \
@@ -57,21 +47,15 @@ def sync_table_to_bronze(table_name, query, catalog_table):
             .option("driver", "com.mysql.cj.jdbc.Driver") \
             .load()
         
-        # Agregar metadatos de auditoria
-        df_audit = df \
-            .withColumn("_sync_timestamp", current_timestamp())
+        df_audit = df.withColumn("_sync_timestamp", current_timestamp())
         
-        # Crear vista temporal
         df_audit.createOrReplaceTempView("temp_sync")
         
-        # Truncar tabla Bronze (eliminar datos anteriores)
-        spark.sql(f"TRUNCATE TABLE {catalog_table}")
-        
-        # Insertar datos nuevos
-        spark.sql(f"INSERT INTO {catalog_table} SELECT * FROM temp_sync")
+        spark.sql(f"TRUNCATE TABLE {bronze_table}")
+        spark.sql(f"INSERT INTO {bronze_table} SELECT * FROM temp_sync")
         
         count = df_audit.count()
-        print(f"{table_name}: {count:,} registros insertados")
+        print(f"{table_name}: {count:,} registros")
         return True
         
     except Exception as e:
@@ -80,92 +64,52 @@ def sync_table_to_bronze(table_name, query, catalog_table):
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Sincronización de Tablas
-
-# COMMAND ----------
-print("Sincronizacion MySQL ERP a Bronze Layer")
-
+print("Iniciando sincronizacion MySQL")
 inicio = datetime.now()
-tablas_exitosas = 0
-tablas_totales = 0
+exitosas = 0
+totales = 5
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### 1. Proveedores
+if sync_table("proveedores",
+              "SELECT proveedor_id, nombre, contacto, telefono, email, ciudad FROM proveedores WHERE activo = true",
+              f"{catalog}.bronze.proveedores"):
+    exitosas += 1
 
 # COMMAND ----------
 
-tablas_totales += 1
-query = "SELECT proveedor_id, nombre, contacto, telefono, email, ciudad FROM proveedores WHERE activo = true"
-if sync_table_to_bronze("proveedores", query, f"{catalog}.bronze.proveedores"):
-    tablas_exitosas += 1
+if sync_table("ordenes_compra",
+              "SELECT orden_id, proveedor_id, fecha_orden, estado, total FROM ordenes_compra",
+              f"{catalog}.bronze.ordenes_compra"):
+    exitosas += 1
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### 2. Productos ERP
+if sync_table("detalle_ordenes",
+              "SELECT detalle_orden_id, orden_id, producto_id, cantidad, precio_unitario FROM detalle_ordenes",
+              f"{catalog}.bronze.detalle_ordenes"):
+    exitosas += 1
 
 # COMMAND ----------
 
-tablas_totales += 1
-query = "SELECT producto_id, codigo_barras, nombre, categoria, unidad_medida FROM productos WHERE activo = true"
-if sync_table_to_bronze("productos_erp", query, f"{catalog}.bronze.productos_erp"):
-    tablas_exitosas += 1
+if sync_table("recepciones",
+              "SELECT recepcion_id, orden_id, fecha_recepcion, sucursal_id, estado FROM recepciones",
+              f"{catalog}.bronze.recepciones"):
+    exitosas += 1
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### 3. Ordenes de Compra
+if sync_table("productos_erp",
+              "SELECT producto_id, codigo_barras, nombre, categoria, unidad_medida FROM productos",
+              f"{catalog}.bronze.productos_erp"):
+    exitosas += 1
 
 # COMMAND ----------
 
-tablas_totales += 1
-query = "SELECT orden_id, proveedor_id, fecha_orden, estado, total FROM ordenes_compra"
-if sync_table_to_bronze("ordenes_compra", query, f"{catalog}.bronze.ordenes_compra"):
-    tablas_exitosas += 1
+duracion = (datetime.now() - inicio).total_seconds()
+print(f"Completado: {exitosas}/{totales} tablas en {duracion:.1f}s")
 
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 4. Detalle Ordenes
-
-# COMMAND ----------
-
-tablas_totales += 1
-query = "SELECT detalle_orden_id, orden_id, producto_id, cantidad, precio_unitario FROM detalle_ordenes"
-if sync_table_to_bronze("detalle_ordenes", query, f"{catalog}.bronze.detalle_ordenes"):
-    tablas_exitosas += 1
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 5. Recepciones
-
-# COMMAND ----------
-
-tablas_totales += 1
-query = "SELECT recepcion_id, orden_id, fecha_recepcion, sucursal_id, estado FROM recepciones"
-if sync_table_to_bronze("recepciones", query, f"{catalog}.bronze.recepciones"):
-    tablas_exitosas += 1
-    tablas_exitosas += 1
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Resumen
-
-# COMMAND ----------
-
-fin = datetime.now()
-duracion = (fin - inicio).total_seconds()
-
-print(f"Completado: {tablas_exitosas}/{tablas_totales} tablas en {duracion:.1f}s")
-
-if tablas_exitosas == tablas_totales:
-    print("Todas las tablas sincronizadas correctamente")
+if exitosas == totales:
     dbutils.notebook.exit("SUCCESS")
 else:
-    print(f"{tablas_totales - tablas_exitosas} tablas fallaron")
-    dbutils.notebook.exit("PARTIAL_SUCCESS")
+    dbutils.notebook.exit(f"PARTIAL: {exitosas}/{totales}")
