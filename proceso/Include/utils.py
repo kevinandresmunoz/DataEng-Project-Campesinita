@@ -16,43 +16,41 @@ def log(message: str):
 def get_catalog():
     """
     Obtener catalogo correcto automaticamente
-    Busca cualquier catalogo que contenga 'campesinita' y 'dev' o 'prod'
+    Busca el catalogo que tenga tablas en bronze.clientes
     """
-    # Primero intentar con el catalogo actual
-    current = spark.sql("SELECT current_catalog()").collect()[0][0]
-    
-    # Si el catalogo actual contiene 'campesinita', usarlo
-    if "campesinita" in current.lower():
-        return current
-    
-    # Si no, buscar en todos los catalogos disponibles
     catalogs = spark.sql("SHOW CATALOGS").collect()
     
-    # Buscar catalogo con 'campesinita' y 'dev'
-    for row in catalogs:
-        cat_name = row[0]
-        if "campesinita" in cat_name.lower() and "dev" in cat_name.lower():
-            log(f"Catalogo detectado: {cat_name}")
-            spark.sql(f"USE CATALOG {cat_name}")
-            return cat_name
+    log("Buscando catalogo correcto con datos...")
     
-    # Si no encuentra dev, buscar prod
-    for row in catalogs:
-        cat_name = row[0]
-        if "campesinita" in cat_name.lower() and "prod" in cat_name.lower():
-            log(f"Catalogo detectado: {cat_name}")
-            spark.sql(f"USE CATALOG {cat_name}")
-            return cat_name
-    
-    # Si no encuentra ninguno, buscar cualquiera con 'campesinita'
+    # Buscar catalogo que contenga 'campesinita' y tenga la tabla bronze.clientes
     for row in catalogs:
         cat_name = row[0]
         if "campesinita" in cat_name.lower():
-            log(f"Catalogo detectado: {cat_name}")
+            try:
+                # Intentar verificar si existe bronze.clientes en este catalogo
+                spark.sql(f"USE CATALOG {cat_name}")
+                result = spark.sql(f"SHOW TABLES IN {cat_name}.bronze LIKE 'clientes'").collect()
+                
+                if len(result) > 0:
+                    log(f"Catalogo correcto encontrado: {cat_name} (tiene tablas en bronze)")
+                    return cat_name
+                else:
+                    log(f"Catalogo {cat_name} existe pero no tiene tablas en bronze")
+            except Exception as e:
+                log(f"Catalogo {cat_name} no tiene schema bronze o no es accesible")
+                continue
+    
+    # Si no encuentra ninguno con tablas, usar el primero que contenga 'campesinita'
+    log("No se encontro catalogo con tablas, usando el primero disponible con 'campesinita'")
+    for row in catalogs:
+        cat_name = row[0]
+        if "campesinita" in cat_name.lower():
+            log(f"Usando catalogo: {cat_name}")
             spark.sql(f"USE CATALOG {cat_name}")
             return cat_name
     
-    # Si no encuentra nada, usar el actual
+    # Ultimo recurso: usar el catalogo actual
+    current = spark.sql("SELECT current_catalog()").collect()[0][0]
     log(f"Usando catalogo actual: {current}")
     return current
 
