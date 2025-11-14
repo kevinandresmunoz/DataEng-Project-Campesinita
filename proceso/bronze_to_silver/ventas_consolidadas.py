@@ -25,36 +25,62 @@ print(f"Detalle Bronze: {df_detalle.count():,}")
 
 # COMMAND ----------
 
-df_ventas_clean = df_ventas \
+df_ventas_transformed = df_ventas \
     .filter(col("total") > 0) \
     .filter(col("estatus") == "completada") \
     .filter(col("fecha_hora").isNotNull()) \
+    .dropDuplicates(["id"]) \
     .withColumn("venta_id", col("id")) \
     .withColumn("fecha", col("fecha_hora")) \
-    .dropDuplicates(["id"]) \
     .withColumn("fecha_date", to_date(col("fecha_hora"))) \
     .withColumn("hora", hour(col("fecha_hora"))) \
     .withColumn("dia_semana", dayofweek(col("fecha_hora"))) \
-    .withColumn("es_fin_semana", when(col("dia_semana").isin([1, 7]), True).otherwise(False)) \
+    .withColumn("es_fin_semana", when(dayofweek(col("fecha_hora")).isin([1, 7]), True).otherwise(False)) \
     .withColumn("periodo_dia",
-        when(col("hora").between(6, 11), "Mañana")
-        .when(col("hora").between(12, 17), "Tarde")
+        when(hour(col("fecha_hora")).between(6, 11), "Mañana")
+        .when(hour(col("fecha_hora")).between(12, 17), "Tarde")
         .otherwise("Noche")) \
     .withColumn("estado", col("estatus"))
+
+# Seleccionar solo las columnas necesarias
+df_ventas_clean = df_ventas_transformed.select(
+    col("venta_id"),
+    col("fecha"),
+    col("cliente_id"),
+    col("sucursal_id"),
+    col("total"),
+    col("estado"),
+    col("metodo_pago"),
+    col("fecha_date"),
+    col("hora"),
+    col("dia_semana"),
+    col("es_fin_semana"),
+    col("periodo_dia")
+)
 
 print(f"Ventas limpias: {df_ventas_clean.count():,}")
 
 # COMMAND ----------
 
-df_detalle_clean = df_detalle \
+df_detalle_transformed = df_detalle \
     .filter(col("cantidad") > 0) \
     .filter(col("precio_unitario") > 0) \
     .filter(col("subtotal") > 0) \
-    .withColumn("detalle_id", col("id")) \
     .dropDuplicates(["id"]) \
+    .withColumn("detalle_id", col("id")) \
     .withColumn("subtotal_calculado", col("cantidad") * col("precio_unitario")) \
-    .withColumn("diferencia_subtotal", abs(col("subtotal") - col("subtotal_calculado"))) \
+    .withColumn("diferencia_subtotal", abs(col("subtotal") - (col("cantidad") * col("precio_unitario")))) \
     .filter(col("diferencia_subtotal") < 1.0)
+
+# Seleccionar solo las columnas necesarias
+df_detalle_clean = df_detalle_transformed.select(
+    col("detalle_id"),
+    col("venta_id"),
+    col("producto_id"),
+    col("cantidad"),
+    col("precio_unitario"),
+    col("subtotal")
+)
 
 print(f"Detalle limpio: {df_detalle_clean.count():,}")
 
