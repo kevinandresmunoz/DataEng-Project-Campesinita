@@ -6,11 +6,29 @@ Sistema de ingenieria de datos para retail con arquitectura Medallion en Azure D
 
 Pipeline completo de datos que simula el ecosistema de informacion de una cadena de supermercados colombiana. El sistema genera datos sinteticos realistas mediante Apache Airflow, los almacena en bases de datos operacionales (PostgreSQL y MySQL), y los procesa a traves de arquitectura Medallion hasta un modelo dimensional optimizado para analisis de negocio.
 
-## Generacion de Datos
+## Nota Importante sobre los Datos
+
+**Datos Sinteticos y Bootstrapping:**
+
+Este proyecto utiliza datos completamente sinteticos generados mediante tecnicas de bootstrapping (similar a [DataCamp Bootstrapping](https://www.datacamp.com/tutorial/bootstrapping)). Los datos han sido aumentados a partir de muestras base para crear volumenes considerables que permitan probar la arquitectura de datos a escala.
+
+**Enfoque del Proyecto:**
+
+El objetivo principal NO es el analisis de datos, sino demostrar y validar:
+- Arquitectura Medallion en entorno cloud
+- Pipeline completo de ingenieria de datos
+- Procesamiento distribuido con Spark
+- Orquestacion automatizada
+- Integracion de multiples tecnologias (Airflow, Databricks, Azure Data Factory)
+- Manejo de volumenes significativos de datos
+
+Los datos sinteticos permiten simular escenarios realistas sin comprometer informacion sensible, facilitando pruebas de rendimiento, escalabilidad y validacion de la arquitectura propuesta.
+
+## Generacion de Datos Sinteticos
 
 El proyecto utiliza Apache Airflow para simular operaciones realistas de una cadena de retail:
 
-**Datos base:**
+**Datos base generados:**
 - 25,000 clientes con datos demograficos
 - 8,000 productos activos con precios y costos
 - 30 sucursales distribuidas en Colombia
@@ -177,6 +195,29 @@ El sistema opera de forma completamente automatica:
 4. **25-35 min**: Procesamiento Bronze → Silver → Gold
 5. **Resultado**: Datos actualizados disponibles en Gold Layer para dashboards
 
+### Arquitectura de Tablas y Estrategias de Escritura
+
+**Todas las tablas son EXTERNAL (profesional):**
+- Definidas con LOCATION explícita en Azure Storage
+- DROP elimina solo metadatos, datos persisten
+- Protección contra eliminación accidental
+- Recuperación ante errores de catálogo
+
+**Bronze Layer (Ingestion):**
+- Estrategia: TRUNCATE + INSERT INTO
+- Razón: Tablas ya creadas por DDL, solo insertar datos
+- Ventaja: Control total del schema, no hay duplicados
+
+**Silver y Gold (Transformación):**
+- Estrategia: INSERT OVERWRITE
+- Razón: Tablas ya creadas por DDL, reemplazar datos completos
+- Ventaja: No acumula datos, siempre refleja estado actual
+
+**Por qué no saveAsTable:**
+- saveAsTable crearía tablas MANAGED (elimina datos en DROP)
+- Queremos EXTERNAL para protección profesional
+- DDL define schema explícito, notebooks solo insertan datos
+
 ## Dashboards de Business Intelligence
 
 El proyecto incluye 2 dashboards predefinidos que visualizan los datos procesados en Gold Layer:
@@ -225,11 +266,17 @@ databricks://token:<TOKEN>@<HOST>:443/<CATALOG>?http_path=<HTTP_PATH>
 
 ## Volumetria
 
-- Bronze: 1.85 GB (12 tablas)
-- Silver: 1.2 GB (6 tablas)
-- Gold: 800 MB (11 tablas)
-- Pipeline: 25-35 minutos
-- Frecuencia: 2 veces al dia
+**Datos Sinteticos:**
+- Bronze: 1.85 GB (12 tablas) - Datos crudos sincronizados
+- Silver: 1.2 GB (6 tablas) - Datos limpios y validados
+- Gold: 800 MB (11 tablas) - Modelo dimensional optimizado
+- Total: ~3.85 GB de datos sinteticos
+
+**Procesamiento:**
+- Pipeline completo: 25-35 minutos
+- Frecuencia: 2 veces al dia (1 PM y 9 PM)
+- Ejecucion paralela en Bronze to Silver
+- Ejecucion secuencial en Silver to Gold
 
 ## Recursos Recomendados
 

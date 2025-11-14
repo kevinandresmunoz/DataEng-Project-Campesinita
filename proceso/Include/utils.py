@@ -14,11 +14,8 @@ def log(message: str):
 
 
 def get_catalog():
-    """Obtener catalogo actual"""
-    try:
-        return spark.sql("SELECT current_catalog()").collect()[0][0]
-    except:
-        return "adbslacampesinitadev"
+    """Obtener catalogo actual automaticamente"""
+    return spark.sql("SELECT current_catalog()").collect()[0][0]
 
 
 def read_bronze_table(table: str) -> DataFrame:

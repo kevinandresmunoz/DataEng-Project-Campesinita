@@ -13,7 +13,7 @@ from pyspark.sql.functions import *
 
 # COMMAND ----------
 
-log("=== INICIO: Metricas de Inventario ===")
+print("INICIO: Metricas de Inventario")
 
 # COMMAND ----------
 
@@ -22,8 +22,9 @@ log("=== INICIO: Metricas de Inventario ===")
 
 # COMMAND ----------
 
-df_inventario = spark.table("silver.inventario_clean")
-df_productos = spark.table("silver.productos_clean")
+catalog = get_catalog()
+df_inventario = spark.table(f"{catalog}.silver.inventario_clean")
+df_productos = spark.table(f"{catalog}.silver.productos_clean")
 
 # Join con productos para enriquecer
 df_inv_enriched = df_inventario.join(
@@ -51,7 +52,7 @@ df_fact_inventario = df_inv_enriched.select(
     current_timestamp().alias("fecha_carga")
 )
 
-log(f"Fact Inventario: {df_fact_inventario.count():,}")
+print(f"Fact Inventario: {df_fact_inventario.count():,}")
 write_gold(df_fact_inventario, "fact_inventario", partition_by=["sucursal_key"])
 
 # COMMAND ----------
@@ -73,7 +74,7 @@ df_kpis_inventario = df_fact_inventario.groupBy("sucursal_key").agg(
     avg("dias_hasta_caducidad").alias("dias_promedio_caducidad")
 )
 
-log(f"KPIs Inventario: {df_kpis_inventario.count():,}")
+print(f"KPIs Inventario: {df_kpis_inventario.count():,}")
 write_gold(df_kpis_inventario, "fact_kpis_inventario")
 
 # COMMAND ----------
@@ -104,7 +105,7 @@ df_alertas = df_fact_inventario.filter(col("requiere_accion") == True).select(
     current_timestamp().alias("fecha_alerta")
 )
 
-log(f"Alertas Inventario: {df_alertas.count():,}")
+print(f"Alertas Inventario: {df_alertas.count():,}")
 write_gold(df_alertas, "fact_alertas_inventario")
 
 # COMMAND ----------
@@ -120,5 +121,5 @@ optimize_table("gold.fact_alertas_inventario", zorder_cols=["prioridad", "sucurs
 
 # COMMAND ----------
 
-log("=== COMPLETADO: Metricas de Inventario ===")
+print("COMPLETADO: Metricas de Inventario")
 dbutils.notebook.exit("SUCCESS")

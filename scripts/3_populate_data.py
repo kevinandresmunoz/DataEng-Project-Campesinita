@@ -17,7 +17,7 @@ def log(msg):
 
 # COMMAND ----------
 
-log("Iniciando ingestion a Bronze")
+print("Iniciando ingestion a Bronze")
 
 try:
     dbutils.notebook.run("../proceso/ingestion_to_bronze/sync_postgres_to_bronze", 1200)
@@ -40,7 +40,7 @@ except Exception as e:
 
 # COMMAND ----------
 
-log("Iniciando transformacion Bronze to Silver")
+print("Iniciando transformacion Bronze to Silver")
 
 notebooks_silver = [
     "../proceso/bronze_to_silver/ventas_consolidadas",
@@ -63,7 +63,7 @@ for nb in notebooks_silver:
 
 # COMMAND ----------
 
-log("Iniciando transformacion Silver to Gold")
+print("Iniciando transformacion Silver to Gold")
 
 notebooks_gold = [
     "../proceso/silver_to_gold/modelo_dimensional",
@@ -81,5 +81,5 @@ for nb in notebooks_gold:
 
 # COMMAND ----------
 
-log("Pipeline completado exitosamente")
+print("Pipeline completado exitosamente")
 dbutils.notebook.exit("SUCCESS")

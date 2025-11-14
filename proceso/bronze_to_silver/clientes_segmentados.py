@@ -14,30 +14,32 @@ from pyspark.sql.window import Window
 
 # COMMAND ----------
 
-log("=== INICIO: Segmentacion Clientes (Bronze → Silver) ===")
+print("INICIO: Segmentacion Clientes (Bronze → Silver)")
 
 # COMMAND ----------
 
 df_clientes = read_bronze_table("clientes")
-log(f"Clientes Bronze: {df_clientes.count():,}")
+print(f"Clientes Bronze: {df_clientes.count():,}")
 
 # COMMAND ----------
 
 df_clientes_clean = df_clientes \
     .filter(col("nombre").isNotNull()) \
     .filter(col("email").isNotNull()) \
-    .dropDuplicates(["cliente_id"]) \
+    .withColumn("cliente_id", col("id")) \
+    .withColumn("nivel_credito", col("tipo_cliente")) \
+    .dropDuplicates(["id"]) \
     .withColumn("antiguedad_dias", datediff(current_date(), col("fecha_registro"))) \
     .withColumn("segmento_antiguedad",
         when(col("antiguedad_dias") < 90, "Nuevo")
         .when(col("antiguedad_dias") < 365, "Regular")
         .otherwise("Antiguo")) \
     .withColumn("nivel_credito_num",
-        when(col("nivel_credito") == "Alto", 3)
-        .when(col("nivel_credito") == "Medio", 2)
+        when(col("tipo_cliente") == "VIP", 3)
+        .when(col("tipo_cliente") == "Regular", 2)
         .otherwise(1))
 
-log(f"Clientes limpios: {df_clientes_clean.count():,}")
+print(f"Clientes limpios: {df_clientes_clean.count():,}")
 
 # COMMAND ----------
 
@@ -49,5 +51,5 @@ optimize_table("silver.clientes_clean", zorder_cols=["ciudad", "nivel_credito"])
 
 # COMMAND ----------
 
-log("=== COMPLETADO: Clientes (Bronze → Silver) ===")
+print("COMPLETADO: Clientes (Bronze → Silver)")
 dbutils.notebook.exit("SUCCESS")
