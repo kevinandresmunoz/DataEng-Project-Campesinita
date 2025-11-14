@@ -621,8 +621,8 @@ spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {catalog}.gold.fact_rendimiento_productos (
     producto_id BIGINT,
     unidades_vendidas BIGINT,
-    ingresos_totales DECIMAL(10,2),
-    margen_total DECIMAL(10,2),
+    ingresos_totales DECIMAL(18,2),
+    margen_total DECIMAL(18,2),
     numero_ventas BIGINT,
     transacciones_unicas BIGINT
 ) USING DELTA

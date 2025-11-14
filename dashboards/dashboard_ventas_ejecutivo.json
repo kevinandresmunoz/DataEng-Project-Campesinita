@@ -90,7 +90,7 @@
       "viz_type": "table",
       "datasource": "gold.fact_rendimiento_productos",
       "query_context": {
-        "metrics": ["SUM(ingresos_totales)", "SUM(unidades_vendidas)", "AVG(margen_promedio)"],
+        "metrics": ["SUM(ingresos_totales)", "SUM(unidades_vendidas)", "SUM(margen_total)"],
         "groupby": ["producto_id"],
         "order_desc": true,
         "row_limit": 20
@@ -118,15 +118,15 @@
       "description": "Patrón de ventas por hora del día y día de la semana"
     },
     {
-      "slice_name": "Margen Promedio por Sucursal",
+      "slice_name": "Margen Bruto por Sucursal",
       "viz_type": "bar",
       "datasource": "gold.fact_kpis_diarios",
       "query_context": {
-        "metrics": ["AVG(margen_promedio)"],
+        "metrics": ["SUM(margen_bruto_total)"],
         "groupby": ["sucursal_key"],
         "order_desc": true
       },
-      "description": "Rentabilidad promedio por sucursal"
+      "description": "Margen bruto total por sucursal"
     }
   ],
   "filters": [
