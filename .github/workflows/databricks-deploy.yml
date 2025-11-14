@@ -1,0 +1,115 @@
+name: Deploy to Databricks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'proceso/**'
+      - 'scripts/**'
+      - 'seguridad/**'
+  release:
+    types: [published]
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Databricks CLI
+        run: |
+          pip install databricks-cli
+
+      - name: Configure Databricks CLI
+        run: |
+          databricks configure --token <<EOF
+          ${{ secrets.DATABRICKS_HOST }}
+          ${{ secrets.DATABRICKS_TOKEN_DEV }}
+          EOF
+
+      - name: Deploy Notebooks to Dev
+        run: |
+          databricks workspace import_dir \
+            proceso/ \
+            /Workspace/la_campesinita/proceso \
+            --overwrite
+          databricks workspace import_dir \
+            scripts/ \
+            /Workspace/la_campesinita/scripts \
+            --overwrite
+          databricks workspace import_dir \
+            seguridad/ \
+            /Workspace/la_campesinita/seguridad \
+            --overwrite
+
+      - name: Execute Setup Scripts
+        run: |
+          databricks workspace run /Workspace/la_campesinita/scripts/1_drop_medallion.py
+          databricks workspace run /Workspace/la_campesinita/scripts/2_ddl_medallion.py
+          databricks workspace run /Workspace/la_campesinita/scripts/3_populate_data.py
+          databricks workspace run /Workspace/la_campesinita/seguridad/4_grants_medallion.py
+
+      - name: Verify Deployment
+        run: |
+          databricks workspace ls /Workspace/la_campesinita
+
+  deploy-prod:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Databricks CLI
+        run: |
+          pip install databricks-cli
+
+      - name: Configure Databricks CLI
+        run: |
+          databricks configure --token <<EOF
+          ${{ secrets.DATABRICKS_HOST }}
+          ${{ secrets.DATABRICKS_TOKEN_PROD }}
+          EOF
+
+      - name: Deploy Notebooks to Prod
+        run: |
+          databricks workspace import_dir \
+            proceso/ \
+            /Workspace/la_campesinita/proceso \
+            --overwrite
+          databricks workspace import_dir \
+            scripts/ \
+            /Workspace/la_campesinita/scripts \
+            --overwrite
+          databricks workspace import_dir \
+            seguridad/ \
+            /Workspace/la_campesinita/seguridad \
+            --overwrite
+
+      - name: Verify Deployment
+        run: |
+          databricks workspace ls /Workspace/la_campesinita
+          echo "Scripts subidos - ejecutar manualmente en Databricks"
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "Deployment to Production successful"
+          echo "Release: ${{ github.event.release.tag_name }}"
