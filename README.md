@@ -6,11 +6,29 @@ Sistema de ingenieria de datos para retail con arquitectura Medallion en Azure D
 
 Pipeline completo de datos que simula el ecosistema de informacion de una cadena de supermercados colombiana. El sistema genera datos sinteticos realistas mediante Apache Airflow, los almacena en bases de datos operacionales (PostgreSQL y MySQL), y los procesa a traves de arquitectura Medallion hasta un modelo dimensional optimizado para analisis de negocio.
 
-## Generacion de Datos
+## Nota Importante sobre los Datos
+
+**Datos Sinteticos y Bootstrapping:**
+
+Este proyecto utiliza datos completamente sinteticos generados mediante tecnicas de bootstrapping (similar a [DataCamp Bootstrapping](https://www.datacamp.com/tutorial/bootstrapping)). Los datos han sido aumentados a partir de muestras base para crear volumenes considerables que permitan probar la arquitectura de datos a escala.
+
+**Enfoque del Proyecto:**
+
+El objetivo principal NO es el analisis de datos, sino demostrar y validar:
+- Arquitectura Medallion en entorno cloud
+- Pipeline completo de ingenieria de datos
+- Procesamiento distribuido con Spark
+- Orquestacion automatizada
+- Integracion de multiples tecnologias (Airflow, Databricks, Azure Data Factory)
+- Manejo de volumenes significativos de datos
+
+Los datos sinteticos permiten simular escenarios realistas sin comprometer informacion sensible, facilitando pruebas de rendimiento, escalabilidad y validacion de la arquitectura propuesta.
+
+## Generacion de Datos Sinteticos
 
 El proyecto utiliza Apache Airflow para simular operaciones realistas de una cadena de retail:
 
-**Datos base:**
+**Datos base generados:**
 - 25,000 clientes con datos demograficos
 - 8,000 productos activos con precios y costos
 - 30 sucursales distribuidas en Colombia
@@ -45,7 +63,7 @@ Silver Layer (datos limpios)
     ↓
 Gold Layer (modelo dimensional)
     ↓
-Apache Superset (dashboards)
+Databricks Dashboards (visualizacion)
 ```
 
 ## Estructura
@@ -68,8 +86,8 @@ project_campesinita/
 ├── reversion/
 │   └── revocar_permisos.py      # Revoca permisos
 ├── dashboards/
-│   ├── dashboard_ventas_ejecutivo.json
-│   └── dashboard_inventario_operacional.json
+│   ├── campesinita.lvdash.json  # Dashboard Databricks
+│   └── Dashboardcampesinita.PNG # Captura del dashboard
 └── images/                      # Capturas de configuracion Azure
 ```
 
@@ -111,7 +129,7 @@ El proyecto implementa despliegue automatico mediante GitHub Actions.
 **Rama main (produccion Dev):**
 - Merge de Pull Request `updates` → `main` dispara workflow automaticamente
 - GitHub Actions ejecuta:
-  1. Sube notebooks a `/Workspace/la_campesinita/` en Databricks
+  1. Sube notebooks a `/Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/` en Databricks
   2. Ejecuta `1_drop_medallion.py` (elimina schemas existentes)
   3. Ejecuta `2_ddl_medallion.py` (crea catalogos y schemas)
   4. Ejecuta `3_populate_data.py` (ejecuta pipeline completo de datos)
@@ -132,128 +150,222 @@ El workflow utiliza secrets de GitHub para autenticacion:
 
 ### Azure Data Factory
 
-El sistema utiliza Azure Data Factory para orquestar la ingestion y procesamiento de datos:
-
-**Pipeline Configurado:** `Pipeline_Ingestion_and_Processing_Dev`
+**Pipeline:** `Pipeline_Ingestion_and_Processing`
 
 **Activities:**
-1. Sync_PostgreSQL: Ejecuta notebook de ingestion desde PostgreSQL a Bronze Layer
-2. Sync_MySQL: Ejecuta notebook de ingestion desde MySQL a Bronze Layer (secuencial)
-3. Trigger_Processing_Job: Dispara Job de Databricks para procesamiento completo (secuencial)
+1. Sync_PostgreSQL: Notebook sync_postgres_to_bronze (paralelo con Activity 2)
+2. Sync_MySQL: Notebook sync_mysql_to_bronze (paralelo con Activity 1)
+3. Trigger_Processing_Bronze_to_Gold: Job Databricks ID 963768162698377 (depende de 1 y 2)
 
-**Trigger Programado:**
-- Frecuencia: 2 veces al dia
-- Horarios: 1:00 PM y 9:00 PM (hora Colombia)
-- Zona horaria: UTC-05:00 Bogota
+**Configuracion:**
+- Timeout ingestion: 20 minutos por notebook
+- Timeout processing: 1 hora
+- Retry ingestion: 2 intentos
+- Retry processing: 1 intento
+
+**Trigger:** `trigger_daily_ingestion`
+- Tipo: Schedule
+- Frecuencia: Diaria
+- Horarios: 13:00 y 21:00
+- Zona horaria: SA Pacific Standard Time (UTC-05:00 Bogota)
+- Estado: Started
 
 ### Databricks Job
 
-**Job Configurado:** `Processing_Bronze_to_Gold`
+**Job:** `Processing_Bronze_to_Gold_Dev`
+**Job ID:** 963768162698377
+**Cluster:** 1113-193707-hexeup3u (existing cluster con auto-termination 1 hora)
 
-**Tasks de Procesamiento:**
+**Tasks:**
 
-Fase 1 - Bronze to Silver (paralelo):
-- Task 1: Procesa ventas consolidadas
-- Task 2: Procesa clientes segmentados
-- Task 3: Procesa inventario y productos
+Fase 1 - Bronze to Silver (3 tasks paralelas):
+- bronze_to_silver_ventas: ventas_consolidadas.py
+- bronze_to_silver_clientes: clientes_segmentados.py
+- bronze_to_silver_inventario: inventario_productos.py
 
-Fase 2 - Silver to Gold (secuencial):
-- Task 4: Construye modelo dimensional (dimensiones)
-- Task 5: Calcula metricas de ventas (paralelo con Task 6)
-- Task 6: Calcula metricas de inventario (paralelo con Task 5)
+Fase 2 - Silver to Gold Dimensiones (1 task secuencial):
+- silver_to_gold_modelo_dimensional: modelo_dimensional.py (depende de Fase 1)
 
-**Dependencias:**
-- Tasks 1-3 se ejecutan en paralelo
-- Task 4 espera a que terminen Tasks 1-3
-- Tasks 5-6 se ejecutan en paralelo despues de Task 4
+Fase 3 - Silver to Gold Metricas (2 tasks paralelas):
+- silver_to_gold_metricas_ventas: metricas_ventas.py (depende de Fase 2)
+- silver_to_gold_metricas_inventario: metricas_inventario.py (depende de Fase 2)
 
-### Operacion Automatica
+**Rutas notebooks:**
+`/Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/proceso/`
 
-El sistema opera de forma completamente automatica:
+### Flujo de Ejecucion
 
-1. **1 PM y 9 PM**: Data Factory inicia pipeline de ingestion
-2. **5-10 min**: Sincronizacion de datos a Bronze Layer
-3. **Automatico**: Data Factory dispara Databricks Job
-4. **25-35 min**: Procesamiento Bronze → Silver → Gold
-5. **Resultado**: Datos actualizados disponibles en Gold Layer para dashboards
+**Trigger diario (1 PM y 9 PM):**
+1. ADF ejecuta Sync_PostgreSQL y Sync_MySQL en paralelo (15-20 min)
+2. ADF dispara Job Databricks cuando ambos terminan exitosamente
+3. Databricks ejecuta 6 tasks con dependencias (30-40 min)
+4. Datos actualizados en Gold Layer
 
-## Dashboards de Business Intelligence
+**Tiempo total:** 45-60 minutos por ejecucion
 
-El proyecto incluye 2 dashboards predefinidos que visualizan los datos procesados en Gold Layer:
+### Arquitectura de Tablas y Estrategias de Escritura
 
-### Dashboard Ejecutivo de Ventas
+**Todas las tablas son EXTERNAL:**
+- Definidas con LOCATION explícita en Azure Storage
+- DROP elimina solo metadatos, datos persisten
+- Protección contra eliminación accidental
+- Recuperación ante errores de catálogo
 
-Proporciona vision estrategica del negocio para toma de decisiones ejecutivas:
+**Bronze Layer (Ingestion):**
+- Estrategia: TRUNCATE + INSERT INTO
+- Razón: Tablas ya creadas por DDL, solo insertar datos
+- Ventaja: Control total del schema, no hay duplicados
 
-- Ventas totales y tendencias mensuales
-- Top 10 sucursales por ingresos
-- Margen bruto total y promedio
-- Ticket promedio de compra
-- Numero de transacciones y clientes unicos
-- Top 20 productos por ingresos
-- Segmentacion RFM de clientes (Recencia, Frecuencia, Valor Monetario)
-- Patron de ventas por hora y dia de la semana
-- Comparativa ventas fin de semana vs entre semana
+**Silver y Gold (Transformación):**
+- Estrategia: INSERT OVERWRITE
+- Razón: Tablas ya creadas por DDL, reemplazar datos completos
+- Ventaja: No acumula datos, siempre refleja estado actual
 
-**Uso:** Gerencia general, directores comerciales, analistas de negocio
+**Por qué no saveAsTable:**
+- saveAsTable crearía tablas MANAGED (elimina datos en DROP)
+- EXTERNAL para protección
+- DDL define schema explícito, notebooks solo insertan datos
 
-### Dashboard Operacional de Inventario
+## Dashboard de Business Intelligence
 
-Monitoreo en tiempo real para gestion operativa de inventario:
+El proyecto incluye un dashboard interactivo creado en Databricks que visualiza los datos procesados en Gold Layer:
 
-- Valor total de inventario por sucursal
-- Items criticos que requieren atencion inmediata
-- Items en alerta por bajo stock
-- Items a reabastecer por sucursal
-- Alertas por prioridad (Alta, Media, Baja)
-- Acciones recomendadas automaticas
-- Top 30 productos criticos con detalles
-- Estado de caducidad por producto
-- Dias promedio hasta caducidad
-- Timeline de alertas criticas
+### Dashboard La Campesinita
 
-**Uso:** Gerentes de sucursal, jefes de inventario, compradores
+Dashboard operacional que proporciona metricas clave del negocio:
 
-**Importar dashboards:**
-- `dashboards/dashboard_ventas_ejecutivo.json`
-- `dashboards/dashboard_inventario_operacional.json`
+**Visualizaciones incluidas:**
+- Sumatoria de ventas por jornada (mañana, tarde, noche) - grafico de area semanal
+- Numero de transacciones por dia - tendencia temporal
+- Numero de articulos vendidos por hora del dia - distribucion por periodo
+- Total ganancia - metrica agregada de ingresos totales
 
-Configurar conexion a Databricks en Superset:
-```
-databricks://token:<TOKEN>@<HOST>:443/<CATALOG>?http_path=<HTTP_PATH>
-```
+**Datasets utilizados:**
+- fact_kpis_diarios: Metricas agregadas diarias por sucursal
+- fact_ventas: Transacciones detalladas con dimensiones temporales
+- fact_rendimiento_productos: Performance de productos y rentabilidad
+- fact_kpis_inventario: Metricas de inventario por sucursal
+- fact_alertas_inventario: Items criticos que requieren atencion
+
+**Acceso al dashboard:**
+- Archivo: `dashboards/campesinita.lvdash.json`
+- Captura: `dashboards/Dashboardcampesinita.PNG`
+- Importar en Databricks: Workspace → Dashboards → Import Dashboard
+- Catalogo: `adb_campesinita_dev.gold`
+
+**Uso:** Gerencia general, directores comerciales, gerentes de sucursal, analistas de negocio
 
 ## Volumetria
 
-- Bronze: 1.85 GB (12 tablas)
-- Silver: 1.2 GB (6 tablas)
-- Gold: 800 MB (11 tablas)
-- Pipeline: 25-35 minutos
-- Frecuencia: 2 veces al dia
+**Datos Sinteticos:**
+- Bronze: 1.85 GB (12 tablas) - Datos crudos sincronizados
+- Silver: 1.2 GB (6 tablas) - Datos limpios y validados
+- Gold: 800 MB (11 tablas) - Modelo dimensional optimizado
+- Total: ~3.85 GB de datos sinteticos
 
-## Recursos Recomendados
-
-- Cluster: Standard_DS3_v2 o superior
-- Spark: 3.4+
-- DBR: 13.3 LTS
+**Procesamiento:**
+- Pipeline completo: 25-35 minutos
+- Frecuencia: 2 veces al dia (1 PM y 9 PM)
+- Ejecucion paralela en Bronze to Silver
+- Ejecucion secuencial en Silver to Gold
 
 ## Documentacion Tecnica
 
 Ver [proceso/descripcionETL.md](proceso/descripcionETL.md) para detalles del proceso ETL.
 
-## Prerequisitos Azure
+## Servicios Azure Requeridos
 
-Infraestructura configurada:
-- Databricks Workspace: adb-campesinita-dev
-- Unity Catalog: 2 catalogos (dev y prod)
-- Storage Accounts: adlcampesinitadev y adlcampesinitaprod
-- Contenedores: bronze, silver, gold
-- Access Connectors con Managed Identity
-- External Locations: 6 (3 por ambiente)
-- Data Factory: adf-campesinita
-- Key Vault: keys-campesinita
+Este proyecto requiere la siguiente infraestructura en Azure para su implementacion:
 
-Ver imagenes en carpeta `images/` para referencia visual de la configuracion.
+### 1. Azure Databricks Workspace
+- Tier: Premium o Enterprise (requerido para Unity Catalog)
+- Runtime: DBR 13.3 LTS o superior
+- Spark: 3.4+
+- Cluster recomendado: Standard_DS3_v2 o superior
+
+### 2. Unity Catalog
+- 2 catalogos configurados (dev y prod)
+- Metastore asociado al workspace
+- Permisos configurados a nivel de catalogo, schema y tabla
+
+### 3. Azure Data Lake Storage Gen2 (ADLS)
+- 2 Storage Accounts (uno por ambiente: dev y prod)
+- Contenedores por ambiente:
+  - bronze: Datos crudos sincronizados desde bases de datos
+  - silver: Datos limpios y validados
+  - gold: Modelo dimensional optimizado
+- Configuracion de red y firewall segun politicas de seguridad
+
+### 4. Access Connectors for Azure Databricks
+- 2 Access Connectors (uno por ambiente)
+- Managed Identity habilitada
+- Roles asignados:
+  - Storage Blob Data Contributor en los storage accounts correspondientes
+  - Permisos de lectura/escritura en contenedores bronze, silver, gold
+
+### 5. External Locations (Unity Catalog)
+- 6 External Locations configuradas (3 por ambiente):
+  - extl-campesinita-dev-bronze
+  - extl-campesinita-dev-silver
+  - extl-campesinita-dev-gold
+  - extl-campesinita-prod-bronze
+  - extl-campesinita-prod-silver
+  - extl-campesinita-prod-gold
+- Cada External Location vinculada a su Access Connector correspondiente
+
+### 6. Azure Data Factory
+- Pipeline: Pipeline_Ingestion_and_Processing
+- Linked Service: ls_adbcampesinita (conexion a Databricks con Access Token)
+- Trigger: trigger_daily_ingestion (Schedule diario 13:00 y 21:00 UTC-05:00)
+- Activities:
+  - 2 notebooks Databricks (ingestion paralela)
+  - 1 job Databricks (procesamiento con dependencias)
+
+### 7. Azure Key Vault
+- Secrets configurados para conexiones a bases de datos:
+  - PostgreSQL: host, port, database, user, password
+  - MySQL: host, port, database, user, password
+- Scope en Databricks: accesskeys-campesinita
+- Permisos de lectura para Service Principal de Databricks
+
+### 8. Bases de Datos Operacionales (Fuentes de Datos)
+- PostgreSQL: 7 tablas (ventas, clientes, productos, sucursales, inventario, empleados, detalle_ventas)
+- MySQL: 5 tablas (proveedores, ordenes_compra, movimientos_inventario, recepciones, productos_erp)
+- Datos generados por Apache Airflow (ver directorio data_source)
+
+### 9. Azure Active Directory
+- Usuarios habilitados en Azure AD
+- Sincronizacion con Databricks Workspace
+- Grupos de seguridad configurados
+
+### Configuracion de Usuarios y Permisos
+
+La gestion de usuarios y permisos se realiza mediante:
+
+1. Habilitar usuarios en Azure Active Directory
+2. Sincronizar usuarios con Databricks Workspace
+3. Acceder al panel de administracion de Databricks (Admin Console)
+4. Crear grupo de seguridad: analitica
+5. Agregar usuarios al grupo analitica
+6. Ejecutar script de permisos: seguridad/4_grants_medallion.py
+7. Los permisos se asignan a nivel de grupo, no a usuarios individuales
+
+Permisos del grupo analitica:
+- USAGE y SELECT en schema bronze
+- USAGE, SELECT, MODIFY y CREATE TABLE en schemas silver y gold
+- CREATE EXTERNAL TABLE en External Locations
+
+### Referencia Visual
+
+Ver capturas de pantalla de configuraciones en el directorio `images/`:
+- Configuracion de Azure Storage Accounts
+- Contenedores en ADLS (bronze, silver, gold)
+- External Locations en Unity Catalog
+- Access Connectors y Managed Identity
+- Databricks Credentials y Scopes
+- Servicios Azure desplegados
+
+Estas imagenes sirven como guia visual para replicar la configuracion en otros ambientes.
 
 ---
 

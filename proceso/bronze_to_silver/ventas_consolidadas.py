@@ -13,46 +13,76 @@ from pyspark.sql.functions import *
 
 # COMMAND ----------
 
-log("=== INICIO: Limpieza Ventas (Bronze → Silver) ===")
+print("INICIO: Limpieza Ventas (Bronze → Silver)")
 
 # COMMAND ----------
 
 df_ventas = read_bronze_table("ventas")
 df_detalle = read_bronze_table("detalle_ventas")
 
-log(f"Ventas Bronze: {df_ventas.count():,}")
-log(f"Detalle Bronze: {df_detalle.count():,}")
+print(f"Ventas Bronze: {df_ventas.count():,}")
+print(f"Detalle Bronze: {df_detalle.count():,}")
 
 # COMMAND ----------
 
-df_ventas_clean = df_ventas \
+df_ventas_transformed = df_ventas \
     .filter(col("total") > 0) \
-    .filter(col("estado") == "completada") \
-    .filter(col("fecha").isNotNull()) \
-    .dropDuplicates(["venta_id"]) \
-    .withColumn("fecha_date", to_date(col("fecha"))) \
-    .withColumn("hora", hour(col("fecha"))) \
-    .withColumn("dia_semana", dayofweek(col("fecha"))) \
-    .withColumn("es_fin_semana", when(col("dia_semana").isin([1, 7]), True).otherwise(False)) \
+    .filter(col("estatus") == "completada") \
+    .filter(col("fecha_hora").isNotNull()) \
+    .dropDuplicates(["id"]) \
+    .withColumn("venta_id", col("id")) \
+    .withColumn("fecha", col("fecha_hora")) \
+    .withColumn("fecha_date", to_date(col("fecha_hora"))) \
+    .withColumn("hora", hour(col("fecha_hora"))) \
+    .withColumn("dia_semana", dayofweek(col("fecha_hora"))) \
+    .withColumn("es_fin_semana", when(dayofweek(col("fecha_hora")).isin([1, 7]), True).otherwise(False)) \
     .withColumn("periodo_dia",
-        when(col("hora").between(6, 11), "Mañana")
-        .when(col("hora").between(12, 17), "Tarde")
-        .otherwise("Noche"))
+        when(hour(col("fecha_hora")).between(6, 11), "Mañana")
+        .when(hour(col("fecha_hora")).between(12, 17), "Tarde")
+        .otherwise("Noche")) \
+    .withColumn("estado", col("estatus"))
 
-log(f"Ventas limpias: {df_ventas_clean.count():,}")
+# Seleccionar solo las columnas necesarias
+df_ventas_clean = df_ventas_transformed.select(
+    col("venta_id"),
+    col("fecha"),
+    col("cliente_id"),
+    col("sucursal_id"),
+    col("total"),
+    col("estado"),
+    col("metodo_pago"),
+    col("fecha_date"),
+    col("hora"),
+    col("dia_semana"),
+    col("es_fin_semana"),
+    col("periodo_dia")
+)
+
+print(f"Ventas limpias: {df_ventas_clean.count():,}")
 
 # COMMAND ----------
 
-df_detalle_clean = df_detalle \
+df_detalle_transformed = df_detalle \
     .filter(col("cantidad") > 0) \
     .filter(col("precio_unitario") > 0) \
     .filter(col("subtotal") > 0) \
-    .dropDuplicates(["detalle_id"]) \
+    .dropDuplicates(["id"]) \
+    .withColumn("detalle_id", col("id")) \
     .withColumn("subtotal_calculado", col("cantidad") * col("precio_unitario")) \
-    .withColumn("diferencia_subtotal", abs(col("subtotal") - col("subtotal_calculado"))) \
-    .filter(col("diferencia_subtotal") < 0.01)
+    .withColumn("diferencia_subtotal", abs(col("subtotal") - (col("cantidad") * col("precio_unitario")))) \
+    .filter(col("diferencia_subtotal") < 1.0)
 
-log(f"Detalle limpio: {df_detalle_clean.count():,}")
+# Seleccionar solo las columnas necesarias
+df_detalle_clean = df_detalle_transformed.select(
+    col("detalle_id"),
+    col("venta_id"),
+    col("producto_id"),
+    col("cantidad"),
+    col("precio_unitario"),
+    col("subtotal")
+)
+
+print(f"Detalle limpio: {df_detalle_clean.count():,}")
 
 # COMMAND ----------
 
@@ -66,5 +96,5 @@ optimize_table("silver.detalle_ventas_clean", zorder_cols=["venta_id", "producto
 
 # COMMAND ----------
 
-log("=== COMPLETADO: Ventas (Bronze → Silver) ===")
+print("COMPLETADO: Ventas (Bronze → Silver)")
 dbutils.notebook.exit("SUCCESS")

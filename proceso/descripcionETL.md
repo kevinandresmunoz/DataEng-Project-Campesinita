@@ -154,6 +154,48 @@ Ejecutar queries SQL para verificar creacion de tablas y conteo de registros en 
 
 ---
 
+## Arquitectura de Tablas
+
+### Todas las Tablas son EXTERNAL
+
+**Tablas External:**
+- Todas las tablas (Bronze, Silver, Gold) se crean como EXTERNAL
+- Definidas con LOCATION explícita en Azure Storage
+- DDL (2_ddl_medallion.py) crea todas las tablas con schema completo
+
+**Ventajas:**
+- DROP elimina solo metadatos, datos persisten en Azure Storage
+- Protección contra eliminación accidental
+- Recuperación ante errores de catálogo
+- Auditoría y compliance (datos siempre disponibles)
+- Disaster recovery simplificado
+
+### Estrategias de Escritura
+
+**Bronze Layer (Ingestion):**
+- Método: TRUNCATE + INSERT INTO
+- Razón: Tablas ya creadas por DDL, solo insertar datos desde BD
+- Flujo: Lee BD → Crea vista temporal → TRUNCATE → INSERT INTO
+- Ventaja: Control total del schema, no hay duplicados ni acumulación
+
+**Silver Layer (Transformación):**
+- Método: INSERT OVERWRITE
+- Razón: Tablas ya creadas por DDL, reemplazar datos completos
+- Flujo: Lee Bronze → Transforma → INSERT OVERWRITE
+- Ventaja: Reemplaza datos completos, no acumula, siempre consistente
+
+**Gold Layer (Agregación):**
+- Método: INSERT OVERWRITE
+- Razón: Tablas ya creadas por DDL, reemplazar métricas completas
+- Flujo: Lee Silver → Calcula métricas → INSERT OVERWRITE
+- Ventaja: Métricas siempre actualizadas, no hay datos parciales
+
+**Por qué NO saveAsTable:**
+- saveAsTable recrearía las tablas cada vez que se guardan datos
+- Tablas tipo EXTERNAL para mayor protección
+- DDL define schema explícito una vez
+- Notebooks solo insertan/reemplazan datos
+
 ## Notas Tecnicas
 
 ### Origen de Dimensiones
@@ -161,13 +203,24 @@ Ejecutar queries SQL para verificar creacion de tablas y conteo de registros en 
 - dim_clientes y dim_productos: Transformadas desde Silver con logica de negocio
 - dim_sucursales: Leida desde Bronze (datos maestros sincronizados desde PostgreSQL)
 
+### Ciclo de Vida de Datos
+
+**Escenario: DROP → DDL → Populate → DROP**
+
+1. DROP SCHEMA CASCADE: Elimina metadatos (tablas), datos persisten en Storage
+2. CREATE EXTERNAL TABLE: Recrea metadatos apuntando a LOCATION
+3. INSERT OVERWRITE: Reemplaza datos en LOCATION (no acumula)
+4. DROP SCHEMA CASCADE: Elimina metadatos, datos persisten
+
+**Resultado:** No hay acumulación de datos, todo limpio y profesional
+
 ### Prerequisitos de Ejecucion
+- DDL debe ejecutarse primero para crear tablas EXTERNAL
 - Bronze Layer debe contener datos antes de ejecutar pipeline
-- Azure Data Factory configurado para sincronizacion automatica (ver config_azure/CONFIGURACION_DATA_FACTORY.md)
+- Azure Data Factory configurado para sincronizacion automatica
 - Databricks Jobs creados y configurados con dependencias correctas
 - Verificar conectividad a Azure Storage con Access Connector configurado
 - Key Vault configurado con secrets de bases de datos (scope: accesskeys-campesinita)
-- Validar configuracion de Azure ejecutando config_azure/validar_configuracion.py
 
 ### Ejecucion Paralela en Jobs
 Los Databricks Jobs ejecutan tasks en paralelo cuando no tienen dependencias:

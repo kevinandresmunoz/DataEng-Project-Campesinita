@@ -1,0 +1,475 @@
+{
+  "datasets": [
+    {
+      "name": "1bb727fb",
+      "displayName": "Orders and Customers",
+      "queryLines": [
+        "SELECT\n",
+        "  o_orderdate,\n",
+        "  o_custkey\n",
+        "FROM\n",
+        "  `samples`.`tpch`.`orders`"
+      ]
+    },
+    {
+      "name": "3530ec9c",
+      "displayName": "Orders vs Returns",
+      "queryLines": [
+        "SELECT\n",
+        "    l_shipdate,\n",
+        "    l_suppkey,\n",
+        "    COUNT(*) AS total_orders,\n",
+        "    SUM(CASE WHEN l_returnflag = 'R' THEN 1 ELSE 0 END) AS return_count\n",
+        "FROM\n",
+        "    samples.tpch.lineitem\n",
+        "GROUP BY\n",
+        "    l_shipdate,\n",
+        "    l_suppkey\n",
+        "ORDER BY\n",
+        "    l_shipdate;"
+      ]
+    },
+    {
+      "name": "3b52879a",
+      "displayName": "Overall Supplier Count",
+      "queryLines": [
+        "SELECT\n",
+        "  COUNT(distinct(s_suppkey)) AS num_suppliers\n",
+        "FROM\n",
+        "  `samples`.`tpch`.`supplier`"
+      ]
+    },
+    {
+      "name": "a91573ca",
+      "displayName": "Order count by priority and ship mode",
+      "queryLines": [
+        "SELECT\n",
+        "    o.o_orderpriority AS priority,\n",
+        "    l.l_shipmode AS ship_mode,\n",
+        "    COUNT(*) AS order_count,\n",
+        "    o.o_orderdate\n",
+        "FROM\n",
+        "    samples.tpch.orders AS o\n",
+        "JOIN\n",
+        "    samples.tpch.lineitem AS l\n",
+        "ON\n",
+        "    o.o_orderkey = l.l_orderkey\n",
+        "GROUP BY\n",
+        "    o.o_orderpriority,\n",
+        "    l.l_shipmode,\n",
+        "    o.o_orderdate\n",
+        "ORDER BY\n",
+        "    priority,\n",
+        "    ship_mode;"
+      ]
+    },
+    {
+      "name": "ced91012",
+      "displayName": "Revenue Trends by Nation",
+      "queryLines": [
+        "SELECT\n",
+        "    o_orderdate,\n",
+        "    n_name AS nation,\n",
+        "    sum(l_extendedprice * (1 - l_discount) * (((length(n_name))/100) + (year(o_orderdate)-1993)/100)) AS revenue\n",
+        "FROM\n",
+        "    `samples`.`tpch`.`customer`,\n",
+        "    `samples`.`tpch`.`orders`,\n",
+        "    `samples`.`tpch`.`lineitem`,\n",
+        "    `samples`.`tpch`.`nation`\n",
+        "WHERE\n",
+        "    c_custkey = o_custkey\n",
+        "    AND l_orderkey = o_orderkey\n",
+        "    AND c_nationkey = n_nationkey\n",
+        "    AND n_name in ('ARGENTINA', 'UNITED KINGDOM', 'FRANCE', 'BRAZIL', 'CHINA', 'UNITED STATES', 'JAPAN', 'JORDAN')\n",
+        "GROUP BY\n",
+        "    o_orderdate,\n",
+        "    nation\n",
+        "ORDER BY\n",
+        "    nation ASC,\n",
+        "    o_orderdate ASC;"
+      ]
+    },
+    {
+      "name": "e7a62da2",
+      "displayName": "Revenue by Order Priority",
+      "queryLines": [
+        "SELECT\n",
+        "  o_orderdate AS Date,\n",
+        "  o_orderpriority AS Priority,\n",
+        "  sum(o_totalprice) AS `Total Price`\n",
+        "FROM\n",
+        "  `samples`.`tpch`.`orders`\n",
+        "WHERE\n",
+        "  o_orderdate > '1994-01-01'\n",
+        "  AND o_orderdate < '1994-01-31'\n",
+        "GROUP BY\n",
+        "  1,\n",
+        "  2\n",
+        "ORDER BY\n",
+        "  1,\n",
+        "  2"
+      ]
+    },
+    {
+      "name": "ee8e48ce",
+      "displayName": "Most Valuable Customers",
+      "queryLines": [
+        "SELECT\n",
+        "  revenue_per_customer.customer_id AS `Customer ID #`,\n",
+        "  customers.c_mktsegment AS `Customer Segment`,\n",
+        "  concat(\n",
+        "    '<div style=\"background-color:#',\n",
+        "    CASE\n",
+        "      WHEN revenue_per_customer.total_revenue BETWEEN 0 AND 1500000 THEN '88BFE0'\n",
+        "      WHEN revenue_per_customer.total_revenue BETWEEN 1500001 AND 3000000 THEN 'FCED9F'\n",
+        "      WHEN revenue_per_customer.total_revenue BETWEEN 3000001 AND 5000000 THEN 'ED9A93'\n",
+        "      ELSE 'CACFD3'\n",
+        "    END,\n",
+        "    '; text-align:center;\"> $',\n",
+        "    format_number(revenue_per_customer.total_revenue, 0),\n",
+        "    '</div>'\n",
+        "  ) AS `Total Customer Revenue`\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      o_custkey AS customer_id,\n",
+        "      sum(o_totalprice) AS total_revenue\n",
+        "    FROM\n",
+        "      `samples`.`tpch`.`orders`\n",
+        "    GROUP BY\n",
+        "      1\n",
+        "    HAVING\n",
+        "      total_revenue > 0\n",
+        "  ) AS revenue_per_customer\n",
+        "JOIN `samples`.`tpch`.`customer` AS customers\n",
+        "  ON revenue_per_customer.customer_id = customers.c_custkey\n",
+        "JOIN `samples`.`tpch`.`region` AS region\n",
+        "  ON customers.c_nationkey = region.r_regionkey\n",
+        "ORDER BY\n",
+        "  revenue_per_customer.customer_id\n",
+        "LIMIT\n",
+        "  400"
+      ]
+    },
+    {
+      "name": "56897078",
+      "displayName": "dim_clientes",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.dim_clientes"
+      ]
+    },
+    {
+      "name": "fb0a990b",
+      "displayName": "fact_ventas",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.fact_ventas"
+      ]
+    },
+    {
+      "name": "610a52fa",
+      "displayName": "fact_kpis_diarios",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.fact_kpis_diarios"
+      ]
+    },
+    {
+      "name": "afca5c08",
+      "displayName": "dim_tiempo",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.dim_tiempo"
+      ]
+    },
+    {
+      "name": "2b23d830",
+      "displayName": "fact_kpis_inventario",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.fact_kpis_inventario"
+      ]
+    },
+    {
+      "name": "488532e7",
+      "displayName": "fact_rendimiento_productos",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.fact_rendimiento_productos"
+      ]
+    },
+    {
+      "name": "c066b516",
+      "displayName": "fact_alertas_inventario",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.fact_alertas_inventario"
+      ]
+    },
+    {
+      "name": "28b377d6",
+      "displayName": "dim_sucursales",
+      "queryLines": [
+        "SELECT * FROM adb_campesinita_dev.gold.dim_sucursales"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "c0e5ea03",
+      "displayName": "Dasboard campesinita",
+      "layout": [
+        {
+          "widget": {
+            "name": "re1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "610a52fa",
+                  "fields": [
+                    {
+                      "name": "weekly(fecha_key)",
+                      "expression": "DATE_TRUNC(\"WEEK\", `fecha_key`)"
+                    },
+                    {
+                      "name": "sum(ventas_tarde)",
+                      "expression": "SUM(`ventas_tarde`)"
+                    },
+                    {
+                      "name": "sum(ventas_noche)",
+                      "expression": "SUM(`ventas_noche`)"
+                    },
+                    {
+                      "name": "sum(ventas_manana)",
+                      "expression": "SUM(`ventas_manana`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "area",
+              "encodings": {
+                "x": {
+                  "fieldName": "weekly(fecha_key)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "sum(ventas_tarde)"
+                    },
+                    {
+                      "fieldName": "sum(ventas_noche)"
+                    },
+                    {
+                      "fieldName": "sum(ventas_manana)"
+                    }
+                  ]
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "showDescription": false,
+                "title": "Sumatoria de ventas por jornada"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 5,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "critical-items-by-branch",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "610a52fa",
+                  "fields": [
+                    {
+                      "name": "daily(fecha_key)",
+                      "expression": "DATE_TRUNC(\"DAY\", `fecha_key`)"
+                    },
+                    {
+                      "name": "sum(numero_transacciones)",
+                      "expression": "SUM(`numero_transacciones`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(fecha_key)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(numero_transacciones)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "Número de transacciones por día",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "sales-distribution-by-day-of-week",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fb0a990b",
+                  "fields": [
+                    {
+                      "name": "periodo_dia",
+                      "expression": "`periodo_dia`"
+                    },
+                    {
+                      "name": "sum(cantidad_total_items)",
+                      "expression": "SUM(`cantidad_total_items`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "periodo_dia",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(cantidad_total_items)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "Número de artículos vendidos por hora del día",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 7,
+            "width": 2,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "total-revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "488532e7",
+                  "fields": [
+                    {
+                      "name": "sum(ingresos_totales)",
+                      "expression": "SUM(`ingresos_totales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(ingresos_totales)"
+                }
+              },
+              "frame": {
+                "title": "Total ganancia",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 2,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "e19fb938",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "918744c1",
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": []
+              },
+              "frame": {
+                "showTitle": false,
+                "showDescription": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "genieSpace": {
+      "isEnabled": true
+    },
+    "applyModeEnabled": false
+  }
+}

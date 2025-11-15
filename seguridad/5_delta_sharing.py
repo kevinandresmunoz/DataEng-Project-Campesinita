@@ -6,14 +6,27 @@
 # COMMAND ----------
 
 # Widgets para parametrizacion
-dbutils.widgets.dropdown("ambiente", "dev", ["dev", "prod"], "Ambiente")
+dbutils.widgets.text("catalog", "")
 
-# Obtener parametros
-ambiente = dbutils.widgets.get("ambiente")
-catalog = f"adbslacampesinita{ambiente}"
+# Obtener parametro o usar catalogo actual
+catalog_input = dbutils.widgets.get("catalog")
 
-print(f"Ambiente: {ambiente}")
-print(f"Catalogo: {catalog}")
+if not catalog_input:
+    catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
+    print(f"Catalogo detectado automaticamente: {catalog}")
+else:
+    catalog = catalog_input
+    print(f"Catalogo proporcionado: {catalog}")
+
+# Inferir ambiente del catalogo
+if "dev" in catalog.lower():
+    ambiente = "dev"
+elif "prod" in catalog.lower():
+    ambiente = "prod"
+else:
+    ambiente = "dev"
+    
+print(f"Ambiente inferido: {ambiente}")
 
 # COMMAND ----------
 

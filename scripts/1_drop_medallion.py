@@ -1,5 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
+# MAGIC ##ADVERTENCIA: Este script eliminara TODAS las tablas y datos fisicos
 # MAGIC # Drop Medallion - La Campesinita
 # MAGIC Elimina tablas de Bronze, Silver y Gold
 

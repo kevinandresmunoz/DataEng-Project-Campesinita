@@ -5,12 +5,16 @@
 
 # COMMAND ----------
 
+dbutils.widgets.removeAll()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Parametros
 
 # COMMAND ----------
 
-dbutils.widgets.dropdown("ambiente", "dev", ["dev", "prod"])
+dbutils.widgets.text("catalog", "")
 
 # COMMAND ----------
 
@@ -19,10 +23,25 @@ dbutils.widgets.dropdown("ambiente", "dev", ["dev", "prod"])
 
 # COMMAND ----------
 
-ambiente = dbutils.widgets.get("ambiente")
-catalog = f"adbslacampesinita{ambiente}"
-print(f"Catalogo: {catalog}")
-print(f"Ambiente: {ambiente}")
+# Obtener parametro o usar catalogo actual
+catalog_input = dbutils.widgets.get("catalog")
+
+if not catalog_input:
+    catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
+    print(f"Catalogo detectado automaticamente: {catalog}")
+else:
+    catalog = catalog_input
+    print(f"Catalogo proporcionado: {catalog}")
+
+# Inferir ambiente del catalogo
+if "dev" in catalog.lower():
+    ambiente = "dev"
+elif "prod" in catalog.lower():
+    ambiente = "prod"
+else:
+    ambiente = "dev"
+    
+print(f"Ambiente inferido: {ambiente}")
 
 # COMMAND ----------
 
@@ -31,10 +50,9 @@ print(f"Ambiente: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC REVOKE SELECT ON ALL TABLES IN SCHEMA ${catalog}.bronze FROM analitica;
-# MAGIC REVOKE SELECT, MODIFY ON ALL TABLES IN SCHEMA ${catalog}.silver FROM analitica;
-# MAGIC REVOKE SELECT, MODIFY ON ALL TABLES IN SCHEMA ${catalog}.gold FROM analitica;
+spark.sql(f"REVOKE SELECT ON ALL TABLES IN SCHEMA {catalog}.bronze FROM analitica")
+spark.sql(f"REVOKE SELECT, MODIFY ON ALL TABLES IN SCHEMA {catalog}.silver FROM analitica")
+spark.sql(f"REVOKE SELECT, MODIFY ON ALL TABLES IN SCHEMA {catalog}.gold FROM analitica")
 
 # COMMAND ----------
 
@@ -43,19 +61,18 @@ print(f"Ambiente: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC REVOKE SELECT ON SCHEMA ${catalog}.bronze FROM analitica;
-# MAGIC REVOKE USAGE ON SCHEMA ${catalog}.bronze FROM analitica;
-# MAGIC
-# MAGIC REVOKE CREATE TABLE ON SCHEMA ${catalog}.silver FROM analitica;
-# MAGIC REVOKE MODIFY ON SCHEMA ${catalog}.silver FROM analitica;
-# MAGIC REVOKE SELECT ON SCHEMA ${catalog}.silver FROM analitica;
-# MAGIC REVOKE USAGE ON SCHEMA ${catalog}.silver FROM analitica;
-# MAGIC
-# MAGIC REVOKE CREATE TABLE ON SCHEMA ${catalog}.gold FROM analitica;
-# MAGIC REVOKE MODIFY ON SCHEMA ${catalog}.gold FROM analitica;
-# MAGIC REVOKE SELECT ON SCHEMA ${catalog}.gold FROM analitica;
-# MAGIC REVOKE USAGE ON SCHEMA ${catalog}.gold FROM analitica;
+spark.sql(f"REVOKE SELECT ON SCHEMA {catalog}.bronze FROM analitica")
+spark.sql(f"REVOKE USAGE ON SCHEMA {catalog}.bronze FROM analitica")
+
+spark.sql(f"REVOKE CREATE TABLE ON SCHEMA {catalog}.silver FROM analitica")
+spark.sql(f"REVOKE MODIFY ON SCHEMA {catalog}.silver FROM analitica")
+spark.sql(f"REVOKE SELECT ON SCHEMA {catalog}.silver FROM analitica")
+spark.sql(f"REVOKE USAGE ON SCHEMA {catalog}.silver FROM analitica")
+
+spark.sql(f"REVOKE CREATE TABLE ON SCHEMA {catalog}.gold FROM analitica")
+spark.sql(f"REVOKE MODIFY ON SCHEMA {catalog}.gold FROM analitica")
+spark.sql(f"REVOKE SELECT ON SCHEMA {catalog}.gold FROM analitica")
+spark.sql(f"REVOKE USAGE ON SCHEMA {catalog}.gold FROM analitica")
 
 # COMMAND ----------
 
@@ -64,8 +81,7 @@ print(f"Ambiente: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC REVOKE USAGE ON CATALOG ${catalog} FROM analitica;
+spark.sql(f"REVOKE USAGE ON CATALOG {catalog} FROM analitica")
 
 # COMMAND ----------
 
@@ -74,10 +90,9 @@ print(f"Ambiente: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-${ambiente}-bronze` FROM analitica;
-# MAGIC REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-${ambiente}-silver` FROM analitica;
-# MAGIC REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-${ambiente}-gold` FROM analitica;
+spark.sql(f"REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-{ambiente}-bronze` FROM analitica")
+spark.sql(f"REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-{ambiente}-silver` FROM analitica")
+spark.sql(f"REVOKE CREATE EXTERNAL TABLE ON EXTERNAL LOCATION `extl-campesinita-{ambiente}-gold` FROM analitica")
 
 # COMMAND ----------
 
@@ -86,23 +101,19 @@ print(f"Ambiente: {ambiente}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SHOW GRANTS ON CATALOG ${catalog} TO analitica;
+spark.sql(f"SHOW GRANTS ON CATALOG {catalog} TO analitica").show()
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SHOW GRANTS ON SCHEMA ${catalog}.bronze TO analitica;
+spark.sql(f"SHOW GRANTS ON SCHEMA {catalog}.bronze TO analitica").show()
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SHOW GRANTS ON SCHEMA ${catalog}.silver TO analitica;
+spark.sql(f"SHOW GRANTS ON SCHEMA {catalog}.silver TO analitica").show()
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SHOW GRANTS ON SCHEMA ${catalog}.gold TO analitica;
+spark.sql(f"SHOW GRANTS ON SCHEMA {catalog}.gold TO analitica").show()
 
 # COMMAND ----------
 

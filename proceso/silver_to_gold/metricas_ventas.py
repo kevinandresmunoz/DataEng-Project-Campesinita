@@ -14,7 +14,7 @@ from pyspark.sql.window import Window
 
 # COMMAND ----------
 
-log("=== INICIO: Metricas de Ventas ===")
+print("INICIO: Metricas de Ventas")
 
 # COMMAND ----------
 
@@ -23,9 +23,10 @@ log("=== INICIO: Metricas de Ventas ===")
 
 # COMMAND ----------
 
-df_ventas = spark.table("silver.ventas_clean")
-df_detalle = spark.table("silver.detalle_ventas_clean")
-df_productos = spark.table("silver.productos_clean")
+catalog = get_catalog()
+df_ventas = spark.table(f"{catalog}.silver.ventas_clean")
+df_detalle = spark.table(f"{catalog}.silver.detalle_ventas_clean")
+df_productos = spark.table(f"{catalog}.silver.productos_clean")
 
 # Enriquecer detalle con margenes
 df_detalle_enriched = df_detalle.join(
@@ -62,7 +63,7 @@ df_fact_ventas_final = df_fact_ventas.select(
     current_timestamp().alias("fecha_carga")
 )
 
-log(f"Fact Ventas: {df_fact_ventas_final.count():,}")
+print(f"Fact Ventas: {df_fact_ventas_final.count():,}")
 write_gold(df_fact_ventas_final, "fact_ventas", partition_by=["fecha_key"])
 
 # COMMAND ----------
@@ -85,7 +86,7 @@ df_kpis_diarios = df_fact_ventas_final.groupBy("fecha_key", "sucursal_key").agg(
     sum(when(col("periodo_dia") == "Noche", col("total")).otherwise(0)).alias("ventas_noche")
 )
 
-log(f"KPIs Diarios: {df_kpis_diarios.count():,}")
+print(f"KPIs Diarios: {df_kpis_diarios.count():,}")
 write_gold(df_kpis_diarios, "fact_kpis_diarios", partition_by=["fecha_key"])
 
 # COMMAND ----------
@@ -113,7 +114,7 @@ df_rfm_enriched = df_rfm \
         .when(col("recency_dias") > 180, "En Riesgo")
         .otherwise("Regulares"))
 
-log(f"Analisis RFM: {df_rfm_enriched.count():,}")
+print(f"Analisis RFM: {df_rfm_enriched.count():,}")
 write_gold(df_rfm_enriched, "fact_analisis_clientes")
 
 # COMMAND ----------
@@ -131,7 +132,7 @@ df_productos_perf = df_detalle_enriched.groupBy("producto_id").agg(
     countDistinct("venta_id").alias("transacciones_unicas")
 )
 
-log(f"Rendimiento Productos: {df_productos_perf.count():,}")
+print(f"Rendimiento Productos: {df_productos_perf.count():,}")
 write_gold(df_productos_perf, "fact_rendimiento_productos")
 
 # COMMAND ----------
@@ -148,5 +149,5 @@ optimize_table("gold.fact_rendimiento_productos", zorder_cols=["producto_id"])
 
 # COMMAND ----------
 
-log("=== COMPLETADO: Metricas de Ventas ===")
+print("COMPLETADO: Metricas de Ventas")
 dbutils.notebook.exit("SUCCESS")

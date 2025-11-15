@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 # COMMAND ----------
 
-log("=== INICIO: Construccion Modelo Dimensional ===")
+print("INICIO: Construccion Modelo Dimensional")
 
 # COMMAND ----------
 
@@ -50,7 +50,7 @@ df_dim_tiempo = df_dates.select(
         .otherwise("Baja").alias("temporada")
 )
 
-log(f"Dimension Tiempo: {df_dim_tiempo.count():,} dias")
+print(f"Dimension Tiempo: {df_dim_tiempo.count():,} dias")
 write_gold(df_dim_tiempo, "dim_tiempo")
 
 # COMMAND ----------
@@ -60,7 +60,8 @@ write_gold(df_dim_tiempo, "dim_tiempo")
 
 # COMMAND ----------
 
-df_clientes = spark.table("silver.clientes_clean")
+catalog = get_catalog()
+df_clientes = spark.table(f"{catalog}.silver.clientes_clean")
 
 df_dim_clientes = df_clientes.select(
     col("cliente_id").alias("cliente_key"),
@@ -76,7 +77,7 @@ df_dim_clientes = df_clientes.select(
     current_timestamp().alias("fecha_actualizacion")
 )
 
-log(f"Dimension Clientes: {df_dim_clientes.count():,}")
+print(f"Dimension Clientes: {df_dim_clientes.count():,}")
 write_gold(df_dim_clientes, "dim_clientes")
 
 # COMMAND ----------
@@ -86,7 +87,7 @@ write_gold(df_dim_clientes, "dim_clientes")
 
 # COMMAND ----------
 
-df_productos = spark.table("silver.productos_clean")
+df_productos = spark.table(f"{catalog}.silver.productos_clean")
 
 df_dim_productos = df_productos.select(
     col("producto_id").alias("producto_key"),
@@ -94,13 +95,13 @@ df_dim_productos = df_productos.select(
     col("categoria"),
     col("precio"),
     col("costo"),
-    col("proveedor_id"),
+    lit(0).alias("proveedor_id"),
     col("margen"),
     col("categoria_grupo"),
     current_timestamp().alias("fecha_actualizacion")
 )
 
-log(f"Dimension Productos: {df_dim_productos.count():,}")
+print(f"Dimension Productos: {df_dim_productos.count():,}")
 write_gold(df_dim_productos, "dim_productos")
 
 # COMMAND ----------
@@ -113,7 +114,7 @@ write_gold(df_dim_productos, "dim_productos")
 df_sucursales = read_bronze_table("sucursales")
 
 df_dim_sucursales = df_sucursales.select(
-    col("sucursal_id").alias("sucursal_key"),
+    col("id").alias("sucursal_key"),
     col("nombre").alias("sucursal_nombre"),
     col("ciudad"),
     col("region"),
@@ -121,7 +122,7 @@ df_dim_sucursales = df_sucursales.select(
     current_timestamp().alias("fecha_actualizacion")
 )
 
-log(f"Dimension Sucursales: {df_dim_sucursales.count():,}")
+print(f"Dimension Sucursales: {df_dim_sucursales.count():,}")
 write_gold(df_dim_sucursales, "dim_sucursales")
 
 # COMMAND ----------
@@ -138,5 +139,5 @@ optimize_table("gold.dim_sucursales", zorder_cols=["sucursal_key", "ciudad"])
 
 # COMMAND ----------
 
-log("=== COMPLETADO: Modelo Dimensional ===")
+print("COMPLETADO: Modelo Dimensional")
 dbutils.notebook.exit("SUCCESS")
