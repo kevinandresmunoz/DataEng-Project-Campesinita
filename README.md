@@ -63,7 +63,7 @@ Silver Layer (datos limpios)
     ↓
 Gold Layer (modelo dimensional)
     ↓
-Apache Superset (dashboards)
+Databricks Dashboards (visualizacion)
 ```
 
 ## Estructura
@@ -86,8 +86,8 @@ project_campesinita/
 ├── reversion/
 │   └── revocar_permisos.py      # Revoca permisos
 ├── dashboards/
-│   ├── dashboard_ventas_ejecutivo.json
-│   └── dashboard_inventario_operacional.json
+│   ├── campesinita.lvdash.json  # Dashboard Databricks
+│   └── Dashboardcampesinita.PNG # Captura del dashboard
 └── images/                      # Capturas de configuracion Azure
 ```
 
@@ -129,7 +129,7 @@ El proyecto implementa despliegue automatico mediante GitHub Actions.
 **Rama main (produccion Dev):**
 - Merge de Pull Request `updates` → `main` dispara workflow automaticamente
 - GitHub Actions ejecuta:
-  1. Sube notebooks a `/Workspace/la_campesinita/` en Databricks
+  1. Sube notebooks a `/Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/` en Databricks
   2. Ejecuta `1_drop_medallion.py` (elimina schemas existentes)
   3. Ejecuta `2_ddl_medallion.py` (crea catalogos y schemas)
   4. Ejecuta `3_populate_data.py` (ejecuta pipeline completo de datos)
@@ -150,54 +150,62 @@ El workflow utiliza secrets de GitHub para autenticacion:
 
 ### Azure Data Factory
 
-El sistema utiliza Azure Data Factory para orquestar la ingestion y procesamiento de datos:
-
-**Pipeline Configurado:** `Pipeline_Ingestion_and_Processing_Dev`
+**Pipeline:** `Pipeline_Ingestion_and_Processing`
 
 **Activities:**
-1. Sync_PostgreSQL: Ejecuta notebook de ingestion desde PostgreSQL a Bronze Layer
-2. Sync_MySQL: Ejecuta notebook de ingestion desde MySQL a Bronze Layer (secuencial)
-3. Trigger_Processing_Job: Dispara Job de Databricks para procesamiento completo (secuencial)
+1. Sync_PostgreSQL: Notebook sync_postgres_to_bronze (paralelo con Activity 2)
+2. Sync_MySQL: Notebook sync_mysql_to_bronze (paralelo con Activity 1)
+3. Trigger_Processing_Bronze_to_Gold: Job Databricks ID 963768162698377 (depende de 1 y 2)
 
-**Trigger Programado:**
-- Frecuencia: 2 veces al dia
-- Horarios: 1:00 PM y 9:00 PM (hora Colombia)
-- Zona horaria: UTC-05:00 Bogota
+**Configuracion:**
+- Timeout ingestion: 20 minutos por notebook
+- Timeout processing: 1 hora
+- Retry ingestion: 2 intentos
+- Retry processing: 1 intento
+
+**Trigger:** `trigger_daily_ingestion`
+- Tipo: Schedule
+- Frecuencia: Diaria
+- Horarios: 13:00 y 21:00
+- Zona horaria: SA Pacific Standard Time (UTC-05:00 Bogota)
+- Estado: Started
 
 ### Databricks Job
 
-**Job Configurado:** `Processing_Bronze_to_Gold`
+**Job:** `Processing_Bronze_to_Gold_Dev`
+**Job ID:** 963768162698377
+**Cluster:** 1113-193707-hexeup3u (existing cluster con auto-termination 1 hora)
 
-**Tasks de Procesamiento:**
+**Tasks:**
 
-Fase 1 - Bronze to Silver (paralelo):
-- Task 1: Procesa ventas consolidadas
-- Task 2: Procesa clientes segmentados
-- Task 3: Procesa inventario y productos
+Fase 1 - Bronze to Silver (3 tasks paralelas):
+- bronze_to_silver_ventas: ventas_consolidadas.py
+- bronze_to_silver_clientes: clientes_segmentados.py
+- bronze_to_silver_inventario: inventario_productos.py
 
-Fase 2 - Silver to Gold (secuencial):
-- Task 4: Construye modelo dimensional (dimensiones)
-- Task 5: Calcula metricas de ventas (paralelo con Task 6)
-- Task 6: Calcula metricas de inventario (paralelo con Task 5)
+Fase 2 - Silver to Gold Dimensiones (1 task secuencial):
+- silver_to_gold_modelo_dimensional: modelo_dimensional.py (depende de Fase 1)
 
-**Dependencias:**
-- Tasks 1-3 se ejecutan en paralelo
-- Task 4 espera a que terminen Tasks 1-3
-- Tasks 5-6 se ejecutan en paralelo despues de Task 4
+Fase 3 - Silver to Gold Metricas (2 tasks paralelas):
+- silver_to_gold_metricas_ventas: metricas_ventas.py (depende de Fase 2)
+- silver_to_gold_metricas_inventario: metricas_inventario.py (depende de Fase 2)
 
-### Operacion Automatica
+**Rutas notebooks:**
+`/Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/proceso/`
 
-El sistema opera de forma completamente automatica:
+### Flujo de Ejecucion
 
-1. **1 PM y 9 PM**: Data Factory inicia pipeline de ingestion
-2. **5-10 min**: Sincronizacion de datos a Bronze Layer
-3. **Automatico**: Data Factory dispara Databricks Job
-4. **25-35 min**: Procesamiento Bronze → Silver → Gold
-5. **Resultado**: Datos actualizados disponibles en Gold Layer para dashboards
+**Trigger diario (1 PM y 9 PM):**
+1. ADF ejecuta Sync_PostgreSQL y Sync_MySQL en paralelo (15-20 min)
+2. ADF dispara Job Databricks cuando ambos terminan exitosamente
+3. Databricks ejecuta 6 tasks con dependencias (30-40 min)
+4. Datos actualizados en Gold Layer
+
+**Tiempo total:** 45-60 minutos por ejecucion
 
 ### Arquitectura de Tablas y Estrategias de Escritura
 
-**Todas las tablas son EXTERNAL (profesional):**
+**Todas las tablas son EXTERNAL:**
 - Definidas con LOCATION explícita en Azure Storage
 - DROP elimina solo metadatos, datos persisten
 - Protección contra eliminación accidental
@@ -215,54 +223,37 @@ El sistema opera de forma completamente automatica:
 
 **Por qué no saveAsTable:**
 - saveAsTable crearía tablas MANAGED (elimina datos en DROP)
-- Queremos EXTERNAL para protección profesional
+- EXTERNAL para protección
 - DDL define schema explícito, notebooks solo insertan datos
 
-## Dashboards de Business Intelligence
+## Dashboard de Business Intelligence
 
-El proyecto incluye 2 dashboards predefinidos que visualizan los datos procesados en Gold Layer:
+El proyecto incluye un dashboard interactivo creado en Databricks que visualiza los datos procesados en Gold Layer:
 
-### Dashboard Ejecutivo de Ventas
+### Dashboard La Campesinita
 
-Proporciona vision estrategica del negocio para toma de decisiones ejecutivas:
+Dashboard operacional que proporciona metricas clave del negocio:
 
-- Ventas totales y tendencias mensuales
-- Top 10 sucursales por ingresos
-- Margen bruto total y promedio
-- Ticket promedio de compra
-- Numero de transacciones y clientes unicos
-- Top 20 productos por ingresos
-- Segmentacion RFM de clientes (Recencia, Frecuencia, Valor Monetario)
-- Patron de ventas por hora y dia de la semana
-- Comparativa ventas fin de semana vs entre semana
+**Visualizaciones incluidas:**
+- Sumatoria de ventas por jornada (mañana, tarde, noche) - grafico de area semanal
+- Numero de transacciones por dia - tendencia temporal
+- Numero de articulos vendidos por hora del dia - distribucion por periodo
+- Total ganancia - metrica agregada de ingresos totales
 
-**Uso:** Gerencia general, directores comerciales, analistas de negocio
+**Datasets utilizados:**
+- fact_kpis_diarios: Metricas agregadas diarias por sucursal
+- fact_ventas: Transacciones detalladas con dimensiones temporales
+- fact_rendimiento_productos: Performance de productos y rentabilidad
+- fact_kpis_inventario: Metricas de inventario por sucursal
+- fact_alertas_inventario: Items criticos que requieren atencion
 
-### Dashboard Operacional de Inventario
+**Acceso al dashboard:**
+- Archivo: `dashboards/campesinita.lvdash.json`
+- Captura: `dashboards/Dashboardcampesinita.PNG`
+- Importar en Databricks: Workspace → Dashboards → Import Dashboard
+- Catalogo: `adb_campesinita_dev.gold`
 
-Monitoreo en tiempo real para gestion operativa de inventario:
-
-- Valor total de inventario por sucursal
-- Items criticos que requieren atencion inmediata
-- Items en alerta por bajo stock
-- Items a reabastecer por sucursal
-- Alertas por prioridad (Alta, Media, Baja)
-- Acciones recomendadas automaticas
-- Top 30 productos criticos con detalles
-- Estado de caducidad por producto
-- Dias promedio hasta caducidad
-- Timeline de alertas criticas
-
-**Uso:** Gerentes de sucursal, jefes de inventario, compradores
-
-**Importar dashboards:**
-- `dashboards/dashboard_ventas_ejecutivo.json`
-- `dashboards/dashboard_inventario_operacional.json`
-
-Configurar conexion a Databricks en Superset:
-```
-databricks://token:<TOKEN>@<HOST>:443/<CATALOG>?http_path=<HTTP_PATH>
-```
+**Uso:** Gerencia general, directores comerciales, gerentes de sucursal, analistas de negocio
 
 ## Volumetria
 
@@ -323,12 +314,12 @@ Este proyecto requiere la siguiente infraestructura en Azure para su implementac
 - Cada External Location vinculada a su Access Connector correspondiente
 
 ### 6. Azure Data Factory
-- Pipeline configurado: Pipeline_Ingestion_and_Processing_Dev
-- Linked Services:
-  - Conexion a Databricks Workspace
-  - Autenticacion mediante Access Token
-- Triggers programados (1 PM y 9 PM hora Colombia)
-- Activities configuradas para ejecutar notebooks de ingestion
+- Pipeline: Pipeline_Ingestion_and_Processing
+- Linked Service: ls_adbcampesinita (conexion a Databricks con Access Token)
+- Trigger: trigger_daily_ingestion (Schedule diario 13:00 y 21:00 UTC-05:00)
+- Activities:
+  - 2 notebooks Databricks (ingestion paralela)
+  - 1 job Databricks (procesamiento con dependencias)
 
 ### 7. Azure Key Vault
 - Secrets configurados para conexiones a bases de datos:
