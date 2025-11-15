@@ -11,6 +11,9 @@ on:
   release:
     types: [published]
 
+env:
+  DATABRICKS_BASE_PATH: /Users/${{ secrets.DATABRICKS_USER }}/DataEng-Project-Campesinita
+
 jobs:
   deploy-dev:
     name: Deploy to Dev
@@ -41,27 +44,27 @@ jobs:
         run: |
           databricks workspace import_dir \
             proceso/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/proceso \
+            ${{ env.DATABRICKS_BASE_PATH }}/proceso \
             --overwrite
           databricks workspace import_dir \
             scripts/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/scripts \
+            ${{ env.DATABRICKS_BASE_PATH }}/scripts \
             --overwrite
           databricks workspace import_dir \
             seguridad/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/seguridad \
+            ${{ env.DATABRICKS_BASE_PATH }}/seguridad \
             --overwrite
 
       - name: Execute Setup Scripts
         run: |
-          databricks workspace run /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/scripts/1_drop_medallion.py
-          databricks workspace run /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/scripts/2_ddl_medallion.py
-          databricks workspace run /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/scripts/3_populate_data.py
-          databricks workspace run /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/seguridad/4_grants_medallion.py
+          databricks workspace run ${{ env.DATABRICKS_BASE_PATH }}/scripts/1_drop_medallion.py
+          databricks workspace run ${{ env.DATABRICKS_BASE_PATH }}/scripts/2_ddl_medallion.py
+          databricks workspace run ${{ env.DATABRICKS_BASE_PATH }}/scripts/3_populate_data.py
+          databricks workspace run ${{ env.DATABRICKS_BASE_PATH }}/seguridad/4_grants_medallion.py
 
       - name: Verify Deployment
         run: |
-          databricks workspace ls /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita
+          databricks workspace ls ${{ env.DATABRICKS_BASE_PATH }}
 
   deploy-prod:
     name: Deploy to Prod
@@ -92,20 +95,20 @@ jobs:
         run: |
           databricks workspace import_dir \
             proceso/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/proceso \
+            ${{ env.DATABRICKS_BASE_PATH }}/proceso \
             --overwrite
           databricks workspace import_dir \
             scripts/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/scripts \
+            ${{ env.DATABRICKS_BASE_PATH }}/scripts \
             --overwrite
           databricks workspace import_dir \
             seguridad/ \
-            /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita/seguridad \
+            ${{ env.DATABRICKS_BASE_PATH }}/seguridad \
             --overwrite
 
       - name: Verify Deployment
         run: |
-          databricks workspace ls /Users/well2chat_outlook.com#ext#@well2chatoutlook.onmicrosoft.com/DataEng-Project-Campesinita
+          databricks workspace ls ${{ env.DATABRICKS_BASE_PATH }}
           echo "Scripts subidos - ejecutar manualmente en Databricks"
 
       - name: Notify Success
