@@ -25,40 +25,18 @@ dbutils.widgets.text("storage", "")
 
 # COMMAND ----------
 
-# Obtener parametros
+# Obtener parametros o usar valores por defecto
 catalog_input = dbutils.widgets.get("catalog")
 storage_input = dbutils.widgets.get("storage")
 
-# Detectar catalogo correcto
-if catalog_input:
-    # Si se proporciona catalogo, usarlo
+# Si no se proporciona catalogo, usar el actual
+if not catalog_input:
+    catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
+    print(f"Catalogo detectado automaticamente: {catalog}")
+    print(f"Verifica que {catalog} sea el catalogo correcto a eliminar datos, de lo contratrio proporciona el nombre del catalogo")
+else:
     catalog = catalog_input
     print(f"Catalogo proporcionado: {catalog}")
-else:
-    # Buscar catalogo que contenga 'campesinita' y tenga tablas
-    print("Buscando catalogo correcto...")
-    catalogs = spark.sql("SHOW CATALOGS").collect()
-    catalog = None
-    
-    for row in catalogs:
-        cat_name = row[0]
-        if "campesinita" in cat_name.lower():
-            try:
-                # Verificar si tiene schema bronze
-                spark.sql(f"USE CATALOG {cat_name}")
-                schemas = spark.sql(f"SHOW SCHEMAS IN {cat_name}").collect()
-                has_bronze = any("bronze" in s[0].lower() for s in schemas)
-                
-                if has_bronze:
-                    catalog = cat_name
-                    print(f"Catalogo encontrado: {catalog}")
-                    break
-            except:
-                continue
-    
-    if not catalog:
-        print("No se encontro catalogo con 'campesinita', usando catalogo actual")
-        catalog = spark.sql("SELECT current_catalog()").collect()[0][0]
 
 # VALIDACION DE SEGURIDAD: Solo permitir en DEV
 if "dev" not in catalog.lower():
@@ -66,11 +44,8 @@ if "dev" not in catalog.lower():
     print(error_msg)
     dbutils.notebook.exit(error_msg)
 
-# Inferir storage del catalogo
-if storage_input:
-    storage = storage_input
-    print(f"Storage proporcionado: {storage}")
-else:
+# Si no se proporciona storage, inferir del catalogo
+if not storage_input:
     if "dev" in catalog.lower():
         storage = "adlcampesinitadev"
     elif "prod" in catalog.lower():
@@ -78,55 +53,16 @@ else:
     else:
         storage = "adlcampesinitadev"
     print(f"Storage inferido: {storage}")
+    print(f"Verifica que {storage} sea el storage correcto a eliminar datos, de lo contrario proporciona el nombre del storage")
+else:
+    storage = storage_input
+    print(f"Storage proporcionado: {storage}")
 
 print(f"\nCatalogo: {catalog}")
 print(f"Storage: {storage}")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## PELIGRO: Eliminar Catalogo Completo (Opcional)
-# MAGIC 
-# MAGIC Esta opcion elimina el catalogo completo incluyendo toda la metadata.
-# MAGIC 
-# MAGIC Solo usar en fase de desarrollo para limpiar completamente.
-# MAGIC 
-# MAGIC Por defecto esta DESHABILITADO.
-
-# COMMAND ----------
-
-# Widget para habilitar eliminacion de catalogo
-dbutils.widgets.dropdown("eliminar_catalogo", "NO", ["NO", "SI"])
-dbutils.widgets.dropdown("confirmar_eliminacion", "NO", ["NO", "SI_ESTOY_SEGURO"])
-
-# COMMAND ----------
-
-eliminar_catalogo = dbutils.widgets.get("eliminar_catalogo")
-confirmar_eliminacion = dbutils.widgets.get("confirmar_eliminacion")
-
-if eliminar_catalogo == "SI" and confirmar_eliminacion == "SI_ESTOY_SEGURO":
-    print("\n" + "!"*80)
-    print("PELIGRO: ELIMINANDO CATALOGO COMPLETO")
-    print("!"*80)
-    print(f"Catalogo a eliminar: {catalog}")
-    print("Esto eliminara TODA la metadata del catalogo")
-    print("!"*80 + "\n")
-    
-    spark.sql(f"DROP CATALOG IF EXISTS {catalog} CASCADE")
-    
-    print(f"Catalogo {catalog} eliminado completamente")
-    print("Debes ejecutar el DDL nuevamente para recrear la estructura")
-    dbutils.notebook.exit("CATALOG_DROPPED")
-elif eliminar_catalogo == "SI" and confirmar_eliminacion == "NO":
-    print("\n" + "="*80)
-    print("ADVERTENCIA: Seleccionaste eliminar catalogo pero NO confirmaste")
-    print("Cambia 'confirmar_eliminacion' a 'SI_ESTOY_SEGURO' para proceder")
-    print("="*80 + "\n")
-else:
-    print("\n" + "="*80)
-    print("Eliminacion de catalogo DESHABILITADA (por defecto)")
-    print("Solo se eliminaran tablas individuales, el catalogo permanecera")
-    print("="*80 + "\n")
+print("\n" + "="*80)
+print("ADVERTENCIA: Este script eliminara TODAS las tablas y datos fisicos")
+print("="*80)
 
 # COMMAND ----------
 

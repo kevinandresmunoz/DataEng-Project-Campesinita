@@ -62,11 +62,7 @@ def sync_table(table_name, bronze_table):
             .option("password", jdbc_password) \
             .option("driver", "org.postgresql.Driver") \
             .load()
-        
-        # Eliminar _sync_timestamp si ya existe (para evitar duplicados)
-        if "_sync_timestamp" in df.columns:
-            df = df.drop("_sync_timestamp")
-        
+    
         # Agregar timestamp de auditoria
         df_audit = df.withColumn("_sync_timestamp", current_timestamp())
         
